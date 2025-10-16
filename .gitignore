@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+
+# Do not keep compiled artifacts inside src
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts
+

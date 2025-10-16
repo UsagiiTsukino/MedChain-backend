@@ -1,0 +1,12 @@
+[
+  {
+    "type": "event",
+    "name": "AppointmentCreated",
+    "inputs": [
+      { "name": "appointmentId", "type": "uint256", "indexed": true },
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "centerId", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  }
+]
