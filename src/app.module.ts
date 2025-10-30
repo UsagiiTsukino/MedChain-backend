@@ -9,6 +9,10 @@ import { PermissionsModule } from "./permissions/permissions.module";
 import { VaccinesModule } from "./vaccines/vaccines.module";
 import { CentersModule } from "./centers/centers.module";
 import { AppointmentsModule } from "./appointments/appointments.module";
+import { FilesModule } from "./files/files.module";
+import { BookingsModule } from "./bookings/bookings.module";
+import { OrdersModule } from "./orders/orders.module";
+import { PaymentsModule } from "./payments/payments.module";
 
 @Module({
   imports: [
@@ -32,6 +36,10 @@ import { AppointmentsModule } from "./appointments/appointments.module";
     VaccinesModule,
     CentersModule,
     AppointmentsModule,
+    FilesModule,
+    BookingsModule,
+    OrdersModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

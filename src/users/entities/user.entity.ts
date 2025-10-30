@@ -1,29 +1,38 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
-import { Center } from '../../centers/entities/center.entity';
-import { Role } from '../../roles/entities/role.entity';
+import { Entity, PrimaryColumn, Column } from "typeorm";
+import { Center } from "../../centers/entities/center.entity";
+import { Role } from "../../roles/entities/role.entity";
 
-@Entity('users')
+@Entity("users")
 export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
-
-  @Column({ unique: true })
+  @PrimaryColumn({ type: "varchar", length: 255, name: "wallet_address" })
   walletAddress!: string;
 
-  @ManyToOne(() => Center, { nullable: true })
-  center?: Center | null;
+  @Column({ type: "bigint", name: "center_id", nullable: true })
+  centerId?: string | null;
 
-  @ManyToOne(() => Role, { nullable: true })
-  role?: Role | null;
+  @Column({ type: "bigint", name: "role_id", nullable: true })
+  roleId?: string | null;
 
-  @Column({ default: false })
+  @Column({ type: "varchar", length: 255, name: "fullname", nullable: true })
+  fullName?: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  email?: string | null;
+
+  @Column({
+    type: "varchar",
+    length: 255,
+    name: "phone_number",
+    nullable: true,
+  })
+  phoneNumber?: string | null;
+
+  @Column({ type: "date", nullable: true })
+  birthday?: string | null;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  address?: string | null;
+
+  @Column({ type: "bit", name: "is_deleted" })
   isDeleted!: boolean;
-
-  @CreateDateColumn()
-  createdAt!: Date;
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
 }
-
-
