@@ -1,25 +1,32 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { Order } from "./orders.entity";
+import { Body, Controller, Get, Post, Session } from "@nestjs/common";
+import { OrdersService } from "./orders.service";
 
 @Controller("orders")
 export class OrdersController {
-  constructor(
-    @InjectRepository(Order) private readonly orderRepo: Repository<Order>
-  ) {}
+  constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  async create(@Body() orderData: any) {
-    const created = this.orderRepo.create({
-      payload: orderData,
-      status: "CREATED",
-    });
-    return this.orderRepo.save(created);
+  async create(
+    @Body()
+    orderData: {
+      items: Array<{ id: string; quantity: number }>;
+      itemCount: number;
+      totalAmount: number;
+      paymentMethod: string;
+    },
+    @Session() session: Record<string, any>
+  ) {
+    const userWalletAddress = session?.walletAddress || session?.email;
+    if (!userWalletAddress) throw new Error("User not authenticated");
+
+    return this.ordersService.createOrder(orderData, userWalletAddress);
   }
 
   @Get()
-  async list() {
-    return this.orderRepo.find();
+  async list(@Session() session: Record<string, any>) {
+    const userWalletAddress = session?.walletAddress || session?.email;
+    if (!userWalletAddress) throw new Error("User not authenticated");
+
+    return this.ordersService.getOrder(userWalletAddress);
   }
 }

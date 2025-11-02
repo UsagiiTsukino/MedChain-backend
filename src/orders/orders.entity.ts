@@ -2,24 +2,41 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
-  UpdateDateColumn,
 } from "typeorm";
+import { User } from "../users/entities/user.entity";
+import { OrderItem } from "./order-item.entity";
 
 @Entity("orders")
 export class Order {
-  @PrimaryGeneratedColumn("uuid")
-  id!: string;
+  @PrimaryGeneratedColumn({ type: "bigint", name: "order_id" })
+  orderId!: string;
 
-  @Column({ type: "json", nullable: true })
-  payload?: any;
+  @Column({ type: "varchar", length: 255, name: "user_id" })
+  userId!: string;
 
-  @Column({ type: "varchar", length: 32, default: "CREATED" })
-  status!: string;
+  @ManyToOne(() => User, { nullable: false })
+  @JoinColumn({ name: "user_id", referencedColumnName: "walletAddress" })
+  user!: User;
 
-  @CreateDateColumn()
+  @Column({ type: "double", name: "total_amount" })
+  totalAmount!: number;
+
+  @Column({ type: "int", name: "item_count" })
+  itemCount!: number;
+
+  @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
+  orderItems!: OrderItem[];
+
+  @Column({ type: "datetime", name: "order_date" })
+  orderDate!: Date;
+
+  @Column({ type: "varchar", length: 50 })
+  status!: string; // PENDING, PROCESSING, COMPLETED, CANCELLED
+
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
 }

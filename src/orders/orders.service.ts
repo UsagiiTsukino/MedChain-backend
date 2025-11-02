@@ -1,0 +1,104 @@
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Order } from "./orders.entity";
+import { OrderItem } from "./order-item.entity";
+import { Vaccine } from "../vaccines/entities/vaccine.entity";
+import { User } from "../users/entities/user.entity";
+import { Payment } from "../payments/payments.entity";
+
+@Injectable()
+export class OrdersService {
+  constructor(
+    @InjectRepository(Order)
+    private readonly orderRepo: Repository<Order>,
+    @InjectRepository(OrderItem)
+    private readonly orderItemRepo: Repository<OrderItem>,
+    @InjectRepository(Vaccine)
+    private readonly vaccineRepo: Repository<Vaccine>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>
+  ) {}
+
+  async createOrder(
+    request: {
+      items: Array<{ id: string; quantity: number }>;
+      itemCount: number;
+      totalAmount: number;
+      paymentMethod: string;
+    },
+    userWalletAddress: string
+  ) {
+    const user = await this.userRepo.findOne({
+      where: { walletAddress: userWalletAddress },
+    });
+    if (!user) throw new Error("User not found");
+
+    const order = new Order();
+    order.user = user;
+    order.totalAmount = request.totalAmount;
+    order.itemCount = request.itemCount;
+    order.status = "PENDING";
+    order.orderDate = new Date();
+
+    const orderItems: OrderItem[] = [];
+    for (const item of request.items) {
+      const vaccine = await this.vaccineRepo.findOne({
+        where: { id: BigInt(item.id) as any },
+      });
+      if (!vaccine) throw new Error(`Vaccine ${item.id} not found`);
+
+      const orderItem = new OrderItem();
+      orderItem.quantity = item.quantity;
+      orderItem.vaccine = vaccine;
+      orderItem.order = order;
+      orderItems.push(orderItem);
+    }
+
+    order.orderItems = orderItems;
+    const saved = await this.orderRepo.save(order);
+
+    // Create payment
+    const payment = new Payment();
+    payment.referenceId = saved.orderId;
+    payment.referenceType = "ORDER";
+    payment.method = request.paymentMethod;
+    payment.amount = request.totalAmount;
+    payment.currency = request.paymentMethod === "PAYPAL" ? "USD" : "VND";
+    payment.status = "INITIATED";
+
+    if (request.paymentMethod === "PAYPAL") {
+      payment.amount = request.totalAmount * 0.000041;
+    } else if (request.paymentMethod === "METAMASK") {
+      payment.amount = request.totalAmount / 200000.0;
+    }
+
+    const savedPayment = await this.paymentRepo.save(payment);
+
+    return {
+      referenceId: saved.orderId,
+      paymentId: savedPayment.id,
+      method: payment.method,
+      amount: payment.amount,
+      paymentURL:
+        request.paymentMethod === "PAYPAL" ? "http://paypal.com/..." : null,
+    };
+  }
+
+  async getOrder(userWalletAddress: string) {
+    const items = await this.orderRepo.find({
+      where: { user: { walletAddress: userWalletAddress } as any },
+      relations: ["user", "orderItems", "orderItems.vaccine"],
+    });
+
+    return items.map((order) => ({
+      orderId: order.orderId,
+      orderDate: order.orderDate.toISOString().split("T")[0],
+      itemCount: order.itemCount,
+      total: order.totalAmount,
+      status: order.status,
+    }));
+  }
+}

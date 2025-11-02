@@ -19,6 +19,15 @@ export class User {
   @Column({ type: "varchar", length: 255, nullable: true })
   email?: string | null;
 
+  @Column({ type: "varchar", length: 255, nullable: true })
+  password?: string | null;
+
+  @Column({ type: "text", name: "refresh_token", nullable: true })
+  refreshToken?: string | null;
+
+  @Column({ type: "varchar", length: 512, nullable: true })
+  avatar?: string | null;
+
   @Column({
     type: "varchar",
     length: 255,
@@ -33,6 +42,6 @@ export class User {
   @Column({ type: "varchar", length: 255, nullable: true })
   address?: string | null;
 
-  @Column({ type: "bit", name: "is_deleted" })
+  @Column({ type: "bit", name: "is_deleted", default: false })
   isDeleted!: boolean;
 }

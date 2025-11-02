@@ -2,45 +2,47 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
-  UpdateDateColumn,
 } from "typeorm";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
-import { Center } from "../centers/entities/center.entity";
+import { User } from "../users/entities/user.entity";
 
 @Entity("bookings")
 export class Booking {
-  @PrimaryGeneratedColumn("uuid")
-  id!: string;
+  @PrimaryGeneratedColumn({ type: "bigint", name: "booking_id" })
+  bookingId!: string;
 
-  @ManyToOne(() => Vaccine, { nullable: true })
-  vaccine?: Vaccine | null;
+  @Column({ type: "varchar", length: 255, name: "patient_id" })
+  patientId!: string;
 
-  @ManyToOne(() => Center, { nullable: true })
-  center?: Center | null;
+  @ManyToOne(() => User, { nullable: false })
+  @JoinColumn({ name: "patient_id", referencedColumnName: "walletAddress" })
+  patient!: User;
 
-  @Column({ type: "varchar", length: 64, nullable: true })
-  time?: string | null;
+  @Column({ type: "bigint", name: "family_member_id", nullable: true })
+  familyMemberId?: string | null;
 
-  @Column({ type: "date", nullable: true })
-  firstDoseDate?: string | null;
+  @Column({ type: "bigint", name: "vaccine_id" })
+  vaccineId!: string;
 
-  @Column({ type: "decimal", precision: 12, scale: 2, nullable: true })
-  amount?: string | null;
+  @ManyToOne(() => Vaccine, { nullable: false })
+  @JoinColumn({ name: "vaccine_id" })
+  vaccine!: Vaccine;
 
-  @Column({ type: "json", nullable: true })
-  doseSchedules?: any;
+  @Column({ type: "int", name: "total_doses" })
+  totalDoses!: number;
 
-  @Column({ type: "varchar", length: 32, nullable: true })
-  method?: string | null; // payment method
+  @Column({ type: "varchar", length: 50, name: "overall_status" })
+  overallStatus!: string; // PROGRESS, COMPLETED
 
-  @Column({ type: "varchar", length: 32, default: "PENDING" })
-  status!: string;
+  @Column({ type: "double", name: "total_amount" })
+  totalAmount!: number;
 
-  @CreateDateColumn()
+  @Column({ type: "varchar", length: 50 })
+  status!: string; // PENDING, CONFIRMED, CANCELLED
+
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
-
-  @UpdateDateColumn()
-  updatedAt!: Date;
 }

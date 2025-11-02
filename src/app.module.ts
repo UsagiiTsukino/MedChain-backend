@@ -24,9 +24,9 @@ import { PaymentsModule } from "./payments/payments.module";
       port: +(process.env.DB_PORT || 3306),
       username: process.env.DB_USER || "root",
       password: process.env.DB_PASSWORD || "",
-      database: process.env.DB_NAME || "dapp",
+      database: process.env.DB_NAME || "dappdb",
       autoLoadEntities: true,
-      synchronize: process.env.TYPEORM_SYNC === "true",
+      synchronize: false, // Disabled - using manual migrations
     }),
     BlockchainModule,
     AuthModule,

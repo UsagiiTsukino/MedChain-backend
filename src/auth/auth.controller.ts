@@ -1,42 +1,78 @@
-import { Body, Controller, Get, Post, Session } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Session,
+  Headers,
+  HttpException,
+  HttpStatus,
+} from "@nestjs/common";
 import { AuthService } from "./auth.service";
-
-class RegisterDto {
-  walletAddress!: string;
-}
-
-class LoginDto {
-  walletAddress!: string;
-}
+import { BookingsService } from "../bookings/bookings.service";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly bookingsService: BookingsService
+  ) {}
 
   @Post("register")
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(
+    @Body()
+    dto: {
+      fullName?: string;
+      email?: string;
+      password?: string;
+      walletAddress?: string;
+    },
+    @Session() session: Record<string, any>
+  ) {
+    try {
+      console.log("[AuthController] Register request:", {
+        ...dto,
+        password: dto.password ? "***" : undefined,
+      });
+      const result = await this.authService.register(dto);
+      session.walletAddress = result.walletAddress;
+      session.email = result.email;
+      return result;
+    } catch (error) {
+      console.error(
+        "[AuthController] Register error:",
+        (error as Error).message
+      );
+      throw error;
+    }
   }
 
   @Post("login")
-  login(@Body() dto: LoginDto, @Session() session: Record<string, any>) {
+  async login(
+    @Body() dto: { walletAddress: string },
+    @Session() session: Record<string, any>
+  ) {
+    const result = await this.authService.login(dto.walletAddress);
     session.walletAddress = dto.walletAddress;
-    return this.authService.login(dto.walletAddress);
+    return result;
   }
 
-  // Compatibility endpoints expected by frontend
   @Post("login/password")
-  loginWithPassword(
+  async loginWithPassword(
     @Body() body: { username: string; password: string },
     @Session() session: Record<string, any>
   ) {
-    // For now, treat username as walletAddress surrogate
-    session.walletAddress = body.username;
-    return this.authService.login(body.username);
+    const result = await this.authService.loginWithPassword(
+      body.username,
+      body.password
+    );
+    session.email = body.username;
+    session.walletAddress = result.user.walletAddress || result.user.id;
+    return result;
   }
 
   @Post("login/google")
-  loginWithGoogle(
+  async loginWithGoogle(
     @Body() body: { token: string },
     @Session() session: Record<string, any>
   ) {
@@ -47,25 +83,56 @@ export class AuthController {
   }
 
   @Get("account")
-  me(@Session() session: Record<string, any>) {
-    return this.authService.login(session.walletAddress);
+  async me(@Session() session: Record<string, any>) {
+    const identifier = session?.walletAddress || session?.email;
+    if (!identifier) {
+      return null; // Return null instead of throwing error for frontend compatibility
+    }
+    try {
+      return this.authService.getAccount(identifier);
+    } catch (error) {
+      return null;
+    }
   }
 
   @Post("logout")
   logout(@Session() session: Record<string, any>) {
     session.walletAddress = undefined;
+    session.email = undefined;
     return { success: true };
   }
 
   @Get("refresh")
-  refresh() {
-    // Stub access token compatible with axios interceptor contract
-    return { accessToken: "dev-token" };
+  async refresh(@Headers("cookie") cookieHeader?: string) {
+    const refreshToken = cookieHeader
+      ?.split(";")
+      .find((c) => c.trim().startsWith("refresh_token="))
+      ?.split("=")[1];
+    if (!refreshToken) throw new Error("Missing refresh token");
+    return this.authService.refresh(refreshToken);
   }
 
   @Get("my-appointments")
   myAppointments() {
     // To be implemented later by joining appointments table/contract
     return { items: [] };
+  }
+
+  @Get("booking")
+  async getBooking(@Session() session: Record<string, any>) {
+    const identifier = session?.walletAddress || session?.email;
+    if (!identifier) {
+      throw new HttpException("Not authenticated", HttpStatus.UNAUTHORIZED);
+    }
+    return this.bookingsService.getBooking(identifier);
+  }
+
+  @Get("history-booking")
+  async getHistoryBooking(@Session() session: Record<string, any>) {
+    const identifier = session?.walletAddress || session?.email;
+    if (!identifier) {
+      throw new HttpException("Not authenticated", HttpStatus.UNAUTHORIZED);
+    }
+    return this.bookingsService.getHistoryBooking(identifier);
   }
 }

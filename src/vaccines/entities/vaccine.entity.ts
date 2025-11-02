@@ -5,6 +5,11 @@ export class Vaccine {
   @PrimaryGeneratedColumn({ type: "bigint", name: "vaccine_id" })
   id!: string;
 
+  // Virtual field for frontend compatibility
+  get vaccineId(): string {
+    return this.id;
+  }
+
   @Column({ type: "varchar", length: 255 })
   name!: string;
 

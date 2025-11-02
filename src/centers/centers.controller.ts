@@ -32,14 +32,23 @@ export class CentersController {
     return this.centerRepo.findOne({ where: { id } });
   }
 
+  @Get(":id")
+  async getById(@Param("id") id: string) {
+    const center = await this.centerRepo.findOne({
+      where: { id: BigInt(id) as any },
+    });
+    if (!center) throw new Error("Center not found");
+    return { ...center, centerId: center.id };
+  }
+
   @Get()
   async list(
     @Query("q") q?: string,
-    @Query("page") page = "1",
+    @Query("page") page = "0",
     @Query("size") size = "10"
   ) {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
-    const skip = (Math.max(1, parseInt(page as string, 10) || 1) - 1) * take;
+    const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
     const where = q
       ? [{ name: Like(`%${q}%`) }, { address: Like(`%${q}%`) }]
       : {};
@@ -48,12 +57,27 @@ export class CentersController {
       skip,
       take,
     });
-    return { items, total, page: Math.floor(skip / take) + 1, size: take };
+
+    // Map id to centerId for frontend compatibility
+    const result = items.map((c) => ({
+      ...c,
+      centerId: c.id,
+    }));
+
+    return {
+      result,
+      meta: {
+        page: Math.floor(skip / take),
+        pageSize: take,
+        pages: Math.ceil(total / take),
+        total,
+      },
+    };
   }
 
   @Delete(":id")
   async remove(@Param("id") id: string) {
-    await this.centerRepo.delete({ id });
+    await this.centerRepo.delete({ id: BigInt(id) as any });
     return { id };
   }
 }

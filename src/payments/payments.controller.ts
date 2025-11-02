@@ -1,14 +1,26 @@
 import { Body, Controller, Post } from "@nestjs/common";
+import { PaymentsService } from "./payments.service";
 
 @Controller("payments")
 export class PaymentsController {
+  constructor(private readonly paymentsService: PaymentsService) {}
+
   @Post("paypal")
-  paypal(@Body() body: { bookingId: string; paymentId: string }) {
-    return { success: true, method: "PAYPAL", ...body };
+  async paypal(
+    @Body() body: { bookingId?: string; paymentId: string; orderId?: string }
+  ) {
+    return this.paymentsService.updatePaymentPaypal(
+      body.paymentId,
+      body.bookingId,
+      body.orderId
+    );
   }
 
   @Post("meta-mask")
-  metaMask(@Body() body: { paymentId: string; bookingId: string }) {
-    return { success: true, method: "META_MASK", ...body };
+  async metaMask(@Body() body: { paymentId: string; bookingId: string }) {
+    return this.paymentsService.updatePaymentMetaMask(
+      body.paymentId,
+      body.bookingId
+    );
   }
 }

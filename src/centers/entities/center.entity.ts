@@ -5,6 +5,11 @@ export class Center {
   @PrimaryGeneratedColumn({ type: "bigint", name: "center_id" })
   id!: string;
 
+  // Virtual field for frontend compatibility
+  get centerId(): string {
+    return this.id;
+  }
+
   @Column({ type: "varchar", length: 255 })
   name!: string;
 

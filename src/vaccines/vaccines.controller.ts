@@ -30,35 +30,46 @@ export class VaccinesController {
     return this.vaccineRepo.findOne({ where: { id } });
   }
 
+  @Get(":id")
+  async getById(@Param("id") id: string) {
+    const vaccine = await this.vaccineRepo.findOne({ where: { id: BigInt(id) as any } });
+    if (!vaccine) throw new Error("Vaccine not found");
+    return { ...vaccine, vaccineId: vaccine.id };
+  }
+
   @Get()
   async list(
     @Query("q") q?: string,
-    @Query("page") page = "1",
+    @Query("page") page = "0",
     @Query("size") size = "10"
   ) {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
-    const skip = (Math.max(1, parseInt(page as string, 10) || 1) - 1) * take;
-    const where = q ? [{ name: Like(`%${q}%`) }] : {};
+    const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
+    const where: any = { isDeleted: false };
+    if (q) {
+      where.name = Like(`%${q}%`);
+    }
     const [items, total] = await this.vaccineRepo.findAndCount({
       where,
       skip,
       take,
     });
-    return { items, total, page: Math.floor(skip / take) + 1, size: take };
-  }
-
-  @Get(":slug")
-  async getBySlug(@Param("slug") slug: string) {
-    // legacy DB không có slug: tìm theo slug suy ra từ name
-    const items = await this.vaccineRepo.find();
-    const norm = (s: string) =>
-      s
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-");
-    return items.find((v) => norm(v.name) === slug) || null;
+    
+    // Map id to vaccineId for frontend compatibility
+    const result = items.map(v => ({
+      ...v,
+      vaccineId: v.id,
+    }));
+    
+    return {
+      result,
+      meta: {
+        page: Math.floor(skip / take),
+        pageSize: take,
+        pages: Math.ceil(total / take),
+        total,
+      },
+    };
   }
 
   @Delete(":id")

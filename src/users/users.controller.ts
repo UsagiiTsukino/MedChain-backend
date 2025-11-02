@@ -21,65 +21,95 @@ export class UsersController {
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>
   ) {}
 
-  @Put(":walletAddress")
+  @Put()
   async updateProfile(
-    @Param("walletAddress") walletAddress: string,
     @Body()
     body: {
+      walletAddress?: string;
       fullname?: string;
       email?: string;
       phoneNumber?: string;
       birthday?: string;
       address?: string;
-      centerName?: string;
+      centerId?: string;
+      roleId?: string;
     }
   ) {
-    const user = await this.userRepo.findOne({ where: { walletAddress } });
+    if (!body.walletAddress) throw new Error("walletAddress is required");
+    const user = await this.userRepo.findOne({
+      where: { walletAddress: body.walletAddress },
+    });
     if (!user) throw new Error("User not found");
-
-    let center: Center | null = null;
-    if (body.centerName) {
-      center = await this.centerRepo.findOne({
-        where: { name: body.centerName },
-      });
-    }
 
     user.fullName = body.fullname ?? user.fullName;
     user.email = body.email ?? user.email;
     user.phoneNumber = body.phoneNumber ?? user.phoneNumber;
     user.birthday = body.birthday ?? user.birthday;
     user.address = body.address ?? user.address;
-    user.center = center ?? user.center ?? null;
+    if (body.centerId) user.centerId = body.centerId;
+    if (body.roleId) user.roleId = body.roleId;
+
     return this.userRepo.save(user);
   }
 
   @Get()
-  async list(@Query("q") q?: string) {
-    const where = q
-      ? [{ fullName: ILike(`%${q}%`) }, { email: ILike(`%${q}%`) }]
-      : ({} as any);
-    const items = await this.userRepo.find({
+  async list(
+    @Query("q") q?: string,
+    @Query("page") page = "0",
+    @Query("size") size = "10"
+  ) {
+    const take = Math.max(1, parseInt(size as string, 10) || 10);
+    const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
+    const where: any = { isDeleted: false };
+    if (q) {
+      where.fullName = ILike(`%${q}%`);
+    }
+
+    const [items, total] = await this.userRepo.findAndCount({
       where,
-      relations: ["center", "role"],
+      skip,
+      take,
     });
-    return { items, total: items.length };
+    return {
+      result: items,
+      meta: {
+        page: Math.floor(skip / take),
+        pageSize: take,
+        pages: Math.ceil(total / take),
+        total,
+      },
+    };
   }
 
-  @Delete(":id")
-  async remove(@Param("id") id: string) {
-    await this.userRepo.update({ id }, { isDeleted: true });
-    return { id };
+  @Delete(":walletAddress")
+  async remove(@Param("walletAddress") walletAddress: string) {
+    await this.userRepo.update({ walletAddress }, { isDeleted: true });
+    return { walletAddress };
   }
 
   @Get("doctors")
-  async doctors() {
+  async doctors(@Query("page") page = "0", @Query("size") size = "10") {
     const doctorRole = await this.roleRepo.findOne({
       where: { name: "DOCTOR" },
     });
-    if (!doctorRole) return { items: [] };
-    const items = await this.userRepo.find({
-      where: { role: { id: doctorRole.id } as any },
+    if (!doctorRole) return { result: [], meta: { total: 0 } };
+
+    const take = Math.max(1, parseInt(size as string, 10) || 10);
+    const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
+
+    const [items, total] = await this.userRepo.findAndCount({
+      where: { roleId: doctorRole.id, isDeleted: false },
+      skip,
+      take,
     });
-    return { items, total: items.length };
+    return {
+      result: items,
+      meta: {
+        page: Math.floor(skip / take),
+        pageSize: take,
+        pages: Math.ceil(total / take),
+        total,
+      },
+    };
   }
 }
