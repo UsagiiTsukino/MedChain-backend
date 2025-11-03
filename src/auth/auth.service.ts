@@ -13,6 +13,19 @@ export class AuthService {
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>
   ) {}
 
+  // Helper function to get role name from roleId
+  private async getRoleName(
+    roleId: string | null | undefined
+  ): Promise<string | null> {
+    if (!roleId) return null;
+    // Convert to BigInt to avoid collation issues
+    const roleIdBigInt = typeof roleId === "string" ? BigInt(roleId) : roleId;
+    const role = await this.roleRepo.findOne({
+      where: { id: roleIdBigInt.toString() },
+    });
+    return role?.name || null;
+  }
+
   async register(dto: {
     fullName?: string;
     email?: string;
@@ -56,9 +69,13 @@ export class AuthService {
     });
 
     if (!dto.walletAddress && dto.email) {
-      const patientRole = await this.roleRepo.findOne({
-        where: { name: "PATIENT" },
-      });
+      // Use Raw query to avoid collation issues
+      const patientRole = await this.roleRepo
+        .createQueryBuilder("role")
+        .where("role.name COLLATE utf8mb4_general_ci = :name", {
+          name: "PATIENT",
+        })
+        .getOne();
       if (patientRole) user.roleId = patientRole.id;
     }
 
@@ -77,6 +94,7 @@ export class AuthService {
 
     // Generate access token (simple for now)
     const accessToken = crypto.randomBytes(32).toString("hex");
+    const roleName = await this.getRoleName(user.roleId);
 
     return {
       accessToken,
@@ -86,7 +104,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         avatar: user.avatar,
-        role: user.roleId,
+        role: roleName || user.roleId, // Fallback to roleId if role not found
       },
     };
   }
@@ -100,6 +118,8 @@ export class AuthService {
       throw new HttpException("User not found", HttpStatus.UNAUTHORIZED);
     }
 
+    const roleName = await this.getRoleName(user.roleId);
+
     return {
       accessToken: crypto.randomBytes(32).toString("hex"),
       user: {
@@ -108,7 +128,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         avatar: user.avatar,
-        role: user.roleId,
+        role: roleName || user.roleId, // Fallback to roleId if role not found
       },
     };
   }
@@ -124,13 +144,15 @@ export class AuthService {
       throw new HttpException("User not found", HttpStatus.NOT_FOUND);
     }
 
+    const roleName = await this.getRoleName(user.roleId);
+
     return {
       id: user.walletAddress,
       walletAddress: user.walletAddress,
       email: user.email,
       fullName: user.fullName,
       avatar: user.avatar,
-      role: user.roleId,
+      role: roleName || user.roleId, // Fallback to roleId if role not found
       centerId: user.centerId,
     };
   }

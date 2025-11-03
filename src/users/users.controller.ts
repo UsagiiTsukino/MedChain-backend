@@ -89,16 +89,19 @@ export class UsersController {
 
   @Get("doctors")
   async doctors(@Query("page") page = "0", @Query("size") size = "10") {
-    const doctorRole = await this.roleRepo.findOne({
-      where: { name: "DOCTOR" },
-    });
+    // Use Raw query to avoid collation issues
+    const doctorRole = await this.roleRepo
+      .createQueryBuilder("role")
+      .where("role.name COLLATE utf8mb4_general_ci = :name", { name: "DOCTOR" })
+      .getOne();
     if (!doctorRole) return { result: [], meta: { total: 0 } };
 
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
 
+    // Use string comparison to avoid collation issues
     const [items, total] = await this.userRepo.findAndCount({
-      where: { roleId: doctorRole.id, isDeleted: false },
+      where: { roleId: doctorRole.id.toString(), isDeleted: false },
       skip,
       take,
     });

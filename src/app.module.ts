@@ -27,6 +27,10 @@ import { PaymentsModule } from "./payments/payments.module";
       database: process.env.DB_NAME || "dappdb",
       autoLoadEntities: true,
       synchronize: false, // Disabled - using manual migrations
+      charset: "utf8mb4",
+      extra: {
+        charset: "utf8mb4_general_ci",
+      },
     }),
     BlockchainModule,
     AuthModule,

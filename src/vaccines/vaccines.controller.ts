@@ -26,13 +26,17 @@ export class VaccinesController {
 
   @Put(":id")
   async update(@Param("id") id: string, @Body() body: Partial<Vaccine>) {
-    await this.vaccineRepo.update({ id }, body);
+    // Remove 'image' field if present (it might be 'imageUrl' instead)
+    const { image, ...updateData } = body as any;
+    await this.vaccineRepo.update({ id }, updateData);
     return this.vaccineRepo.findOne({ where: { id } });
   }
 
   @Get(":id")
   async getById(@Param("id") id: string) {
-    const vaccine = await this.vaccineRepo.findOne({ where: { id: BigInt(id) as any } });
+    const vaccine = await this.vaccineRepo.findOne({
+      where: { id: BigInt(id) as any },
+    });
     if (!vaccine) throw new Error("Vaccine not found");
     return { ...vaccine, vaccineId: vaccine.id };
   }
@@ -54,13 +58,13 @@ export class VaccinesController {
       skip,
       take,
     });
-    
+
     // Map id to vaccineId for frontend compatibility
-    const result = items.map(v => ({
+    const result = items.map((v) => ({
       ...v,
       vaccineId: v.id,
     }));
-    
+
     return {
       result,
       meta: {
