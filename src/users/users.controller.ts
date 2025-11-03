@@ -8,7 +8,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { ILike, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import { User } from "./entities/user.entity";
 import { Center } from "../centers/entities/center.entity";
 import { Role } from "../roles/entities/role.entity";
@@ -36,9 +36,12 @@ export class UsersController {
     }
   ) {
     if (!body.walletAddress) throw new Error("walletAddress is required");
-    const user = await this.userRepo.findOne({
-      where: { walletAddress: body.walletAddress },
-    });
+    const user = await this.userRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress: body.walletAddress,
+      })
+      .getOne();
     if (!user) throw new Error("User not found");
 
     user.fullName = body.fullname ?? user.fullName;
@@ -60,16 +63,19 @@ export class UsersController {
   ) {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
-    const where: any = { isDeleted: false };
+
+    const queryBuilder = this.userRepo.createQueryBuilder("user");
+    queryBuilder.where("user.isDeleted = :isDeleted", { isDeleted: false });
+
     if (q) {
-      where.fullName = ILike(`%${q}%`);
+      queryBuilder.andWhere(
+        "user.fullname COLLATE utf8mb4_general_ci LIKE :q",
+        { q: `%${q}%` }
+      );
     }
 
-    const [items, total] = await this.userRepo.findAndCount({
-      where,
-      skip,
-      take,
-    });
+    queryBuilder.skip(skip).take(take);
+    const [items, total] = await queryBuilder.getManyAndCount();
     return {
       result: items,
       meta: {
@@ -83,7 +89,15 @@ export class UsersController {
 
   @Delete(":walletAddress")
   async remove(@Param("walletAddress") walletAddress: string) {
-    await this.userRepo.update({ walletAddress }, { isDeleted: true });
+    // Use QueryBuilder to avoid collation issues
+    await this.userRepo
+      .createQueryBuilder()
+      .update()
+      .set({ isDeleted: true })
+      .where("walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress,
+      })
+      .execute();
     return { walletAddress };
   }
 
@@ -99,12 +113,15 @@ export class UsersController {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
 
-    // Use string comparison to avoid collation issues
-    const [items, total] = await this.userRepo.findAndCount({
-      where: { roleId: doctorRole.id.toString(), isDeleted: false },
-      skip,
-      take,
-    });
+    // Use QueryBuilder to avoid collation issues
+    const queryBuilder = this.userRepo.createQueryBuilder("user");
+    queryBuilder
+      .where("user.roleId = :roleId", { roleId: doctorRole.id.toString() })
+      .andWhere("user.isDeleted = :isDeleted", { isDeleted: false })
+      .skip(skip)
+      .take(take);
+
+    const [items, total] = await queryBuilder.getManyAndCount();
     return {
       result: items,
       meta: {

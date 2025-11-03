@@ -9,7 +9,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Like, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import { Vaccine } from "./entities/vaccine.entity";
 
 @Controller("vaccines")
@@ -49,15 +49,18 @@ export class VaccinesController {
   ) {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
-    const where: any = { isDeleted: false };
+
+    const queryBuilder = this.vaccineRepo.createQueryBuilder("vaccine");
+    queryBuilder.where("vaccine.isDeleted = :isDeleted", { isDeleted: false });
+
     if (q) {
-      where.name = Like(`%${q}%`);
+      queryBuilder.andWhere("vaccine.name COLLATE utf8mb4_general_ci LIKE :q", {
+        q: `%${q}%`,
+      });
     }
-    const [items, total] = await this.vaccineRepo.findAndCount({
-      where,
-      skip,
-      take,
-    });
+
+    queryBuilder.skip(skip).take(take);
+    const [items, total] = await queryBuilder.getManyAndCount();
 
     // Map id to vaccineId for frontend compatibility
     const result = items.map((v) => ({

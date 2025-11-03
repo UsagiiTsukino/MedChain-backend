@@ -18,11 +18,11 @@ export class AuthService {
     roleId: string | null | undefined
   ): Promise<string | null> {
     if (!roleId) return null;
-    // Convert to BigInt to avoid collation issues
-    const roleIdBigInt = typeof roleId === "string" ? BigInt(roleId) : roleId;
-    const role = await this.roleRepo.findOne({
-      where: { id: roleIdBigInt.toString() },
-    });
+    // Use QueryBuilder to avoid collation issues
+    const role = await this.roleRepo
+      .createQueryBuilder("role")
+      .where("role.id = :id", { id: roleId.toString() })
+      .getOne();
     return role?.name || null;
   }
 
@@ -40,16 +40,25 @@ export class AuthService {
     let user: User | null = null;
 
     if (dto.email) {
-      user = await this.usersRepo.findOne({ where: { email: dto.email } });
+      user = await this.usersRepo
+        .createQueryBuilder("user")
+        .where("user.email COLLATE utf8mb4_general_ci = :email", {
+          email: dto.email,
+        })
+        .getOne();
       if (user) {
         throw new HttpException("Email already exists", HttpStatus.BAD_REQUEST);
       }
     }
 
     if (dto.walletAddress) {
-      user = await this.usersRepo.findOne({
-        where: { walletAddress: dto.walletAddress },
-      });
+      user = await this.usersRepo
+        .createQueryBuilder("user")
+        .where(
+          "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress",
+          { walletAddress: dto.walletAddress }
+        )
+        .getOne();
       if (user) {
         throw new HttpException(
           "Wallet address already exists",
@@ -83,7 +92,10 @@ export class AuthService {
   }
 
   async loginWithPassword(email: string, password: string) {
-    const user = await this.usersRepo.findOne({ where: { email } });
+    const user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.email COLLATE utf8mb4_general_ci = :email", { email })
+      .getOne();
     if (!user) {
       throw new HttpException("User not found", HttpStatus.UNAUTHORIZED);
     }
@@ -110,10 +122,12 @@ export class AuthService {
   }
 
   async login(walletAddress: string) {
-    const user = await this.usersRepo.findOne({
-      where: { walletAddress },
-      relations: [],
-    });
+    const user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress,
+      })
+      .getOne();
     if (!user) {
       throw new HttpException("User not found", HttpStatus.UNAUTHORIZED);
     }
@@ -134,12 +148,15 @@ export class AuthService {
   }
 
   async getAccount(walletAddressOrEmail: string) {
-    const user = await this.usersRepo.findOne({
-      where: [
-        { walletAddress: walletAddressOrEmail },
-        { email: walletAddressOrEmail },
-      ],
-    });
+    const user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :value", {
+        value: walletAddressOrEmail,
+      })
+      .orWhere("user.email COLLATE utf8mb4_general_ci = :value", {
+        value: walletAddressOrEmail,
+      })
+      .getOne();
     if (!user) {
       throw new HttpException("User not found", HttpStatus.NOT_FOUND);
     }
@@ -158,9 +175,12 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    const user = await this.usersRepo.findOne({
-      where: { refreshToken },
-    });
+    const user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.refreshToken COLLATE utf8mb4_general_ci = :refreshToken", {
+        refreshToken,
+      })
+      .getOne();
     if (!user) {
       throw new HttpException("Invalid refresh token", HttpStatus.UNAUTHORIZED);
     }

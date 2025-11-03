@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Put, Query } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Like, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import { Role } from "./entities/role.entity";
 
 @Controller("roles")
@@ -11,8 +11,15 @@ export class RolesController {
 
   @Get()
   async list(@Query("q") q?: string) {
-    const where = q ? { name: Like(`%${q}%`) } : {};
-    const items = await this.roleRepo.find({ where });
+    const queryBuilder = this.roleRepo.createQueryBuilder("role");
+
+    if (q) {
+      queryBuilder.where("role.name COLLATE utf8mb4_general_ci LIKE :q", {
+        q: `%${q}%`,
+      });
+    }
+
+    const items = await queryBuilder.getMany();
     return { items, total: items.length };
   }
 

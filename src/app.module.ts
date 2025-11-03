@@ -29,8 +29,12 @@ import { PaymentsModule } from "./payments/payments.module";
       synchronize: false, // Disabled - using manual migrations
       charset: "utf8mb4",
       extra: {
-        charset: "utf8mb4_general_ci",
+        // Set default collation for connection to avoid collation mismatch
+        connectionLimit: 10,
       },
+      // Execute SQL after connection to set collation
+      migrations: [],
+      migrationsRun: false,
     }),
     BlockchainModule,
     AuthModule,

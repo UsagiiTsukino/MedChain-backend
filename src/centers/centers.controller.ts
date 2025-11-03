@@ -9,7 +9,7 @@ import {
   Query,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Like } from "typeorm";
+import { Repository } from "typeorm";
 import { Center } from "./entities/center.entity";
 
 @Controller("centers")
@@ -49,14 +49,18 @@ export class CentersController {
   ) {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
-    const where = q
-      ? [{ name: Like(`%${q}%`) }, { address: Like(`%${q}%`) }]
-      : {};
-    const [items, total] = await this.centerRepo.findAndCount({
-      where,
-      skip,
-      take,
-    });
+
+    const queryBuilder = this.centerRepo.createQueryBuilder("center");
+
+    if (q) {
+      queryBuilder.where(
+        "(center.name COLLATE utf8mb4_general_ci LIKE :q OR center.address COLLATE utf8mb4_general_ci LIKE :q)",
+        { q: `%${q}%` }
+      );
+    }
+
+    queryBuilder.skip(skip).take(take);
+    const [items, total] = await queryBuilder.getManyAndCount();
 
     // Map id to centerId for frontend compatibility
     const result = items.map((c) => ({

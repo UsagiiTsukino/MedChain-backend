@@ -31,9 +31,12 @@ export class OrdersService {
     },
     userWalletAddress: string
   ) {
-    const user = await this.userRepo.findOne({
-      where: { walletAddress: userWalletAddress },
-    });
+    const user = await this.userRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress: userWalletAddress,
+      })
+      .getOne();
     if (!user) throw new Error("User not found");
 
     const order = new Order();
@@ -88,10 +91,19 @@ export class OrdersService {
   }
 
   async getOrder(userWalletAddress: string) {
-    const items = await this.orderRepo.find({
-      where: { user: { walletAddress: userWalletAddress } as any },
-      relations: ["user", "orderItems", "orderItems.vaccine"],
-    });
+    const items = await this.orderRepo
+      .createQueryBuilder("order")
+      .leftJoinAndSelect(
+        User,
+        "user",
+        "user.walletAddress COLLATE utf8mb4_general_ci = order.userId COLLATE utf8mb4_general_ci"
+      )
+      .leftJoinAndSelect("order.orderItems", "orderItems")
+      .leftJoinAndSelect("orderItems.vaccine", "vaccine")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress: userWalletAddress,
+      })
+      .getMany();
 
     return items.map((order) => ({
       orderId: order.orderId,

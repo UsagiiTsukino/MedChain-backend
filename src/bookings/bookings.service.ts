@@ -35,9 +35,12 @@ export class BookingsService {
     },
     patientWalletAddress: string
   ) {
-    const patient = await this.userRepo.findOne({
-      where: { walletAddress: patientWalletAddress },
-    });
+    const patient = await this.userRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress: patientWalletAddress,
+      })
+      .getOne();
     if (!patient) throw new Error("Patient not found");
 
     const vaccine = await this.vaccineRepo.findOne({
@@ -97,11 +100,20 @@ export class BookingsService {
     const take = Math.max(1, size);
     const skip = Math.max(0, page) * take;
 
-    const [items, total] = await this.bookingRepo.findAndCount({
-      relations: ["patient", "vaccine"],
-      skip,
-      take,
-    });
+    // Use QueryBuilder with explicit COLLATE in join condition to avoid collation issues
+    // Join patient manually with COLLATE to fix collation mismatch
+    const queryBuilder = this.bookingRepo
+      .createQueryBuilder("booking")
+      .leftJoinAndSelect(
+        User,
+        "patient",
+        "patient.walletAddress COLLATE utf8mb4_general_ci = booking.patientId COLLATE utf8mb4_general_ci"
+      )
+      .leftJoinAndSelect(Vaccine, "vaccine", "vaccine.id = booking.vaccineId")
+      .skip(skip)
+      .take(take);
+
+    const [items, total] = await queryBuilder.getManyAndCount();
 
     return {
       result: items,
@@ -115,21 +127,39 @@ export class BookingsService {
   }
 
   async getBooking(patientWalletAddress: string) {
-    const items = await this.bookingRepo.find({
-      where: {
-        patient: { walletAddress: patientWalletAddress } as any,
-        overallStatus: "PROGRESS",
-      },
-      relations: ["patient", "vaccine"],
-    });
+    const items = await this.bookingRepo
+      .createQueryBuilder("booking")
+      .leftJoinAndSelect(
+        User,
+        "patient",
+        "patient.walletAddress COLLATE utf8mb4_general_ci = booking.patientId COLLATE utf8mb4_general_ci"
+      )
+      .leftJoinAndSelect(Vaccine, "vaccine", "vaccine.id = booking.vaccineId")
+      .where(
+        "patient.walletAddress COLLATE utf8mb4_general_ci = :walletAddress",
+        { walletAddress: patientWalletAddress }
+      )
+      .andWhere("booking.overallStatus COLLATE utf8mb4_general_ci = :status", {
+        status: "PROGRESS",
+      })
+      .getMany();
     return items;
   }
 
   async getHistoryBooking(patientWalletAddress: string) {
-    const items = await this.bookingRepo.find({
-      where: { patient: { walletAddress: patientWalletAddress } as any },
-      relations: ["patient", "vaccine"],
-    });
+    const items = await this.bookingRepo
+      .createQueryBuilder("booking")
+      .leftJoinAndSelect(
+        User,
+        "patient",
+        "patient.walletAddress COLLATE utf8mb4_general_ci = booking.patientId COLLATE utf8mb4_general_ci"
+      )
+      .leftJoinAndSelect(Vaccine, "vaccine", "vaccine.id = booking.vaccineId")
+      .where(
+        "patient.walletAddress COLLATE utf8mb4_general_ci = :walletAddress",
+        { walletAddress: patientWalletAddress }
+      )
+      .getMany();
     return items;
   }
 }
