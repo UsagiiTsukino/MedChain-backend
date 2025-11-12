@@ -117,6 +117,10 @@ export class AuthService {
         fullName: user.fullName,
         avatar: user.avatar,
         role: roleName || user.roleId, // Fallback to roleId if role not found
+        phoneNumber: user.phoneNumber,
+        birthday: user.birthday,
+        address: user.address,
+        centerId: user.centerId,
       },
     };
   }
@@ -143,6 +147,10 @@ export class AuthService {
         fullName: user.fullName,
         avatar: user.avatar,
         role: roleName || user.roleId, // Fallback to roleId if role not found
+        phoneNumber: user.phoneNumber,
+        birthday: user.birthday,
+        address: user.address,
+        centerId: user.centerId,
       },
     };
   }
@@ -171,6 +179,9 @@ export class AuthService {
       avatar: user.avatar,
       role: roleName || user.roleId, // Fallback to roleId if role not found
       centerId: user.centerId,
+      phoneNumber: user.phoneNumber,
+      birthday: user.birthday,
+      address: user.address,
     };
   }
 

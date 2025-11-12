@@ -84,22 +84,32 @@ export class AuthController {
 
   @Get("account")
   async me(@Session() session: Record<string, any>) {
+    console.log("[AuthController] Get account - session:", session);
     const identifier = session?.walletAddress || session?.email;
+    console.log("[AuthController] Identifier:", identifier);
     if (!identifier) {
+      console.log("[AuthController] No identifier found in session");
       return null; // Return null instead of throwing error for frontend compatibility
     }
     try {
-      return this.authService.getAccount(identifier);
+      const account = await this.authService.getAccount(identifier);
+      console.log("[AuthController] Account found:", account);
+      return account;
     } catch (error) {
+      console.error("[AuthController] Error getting account:", error);
       return null;
     }
   }
 
   @Post("logout")
   logout(@Session() session: Record<string, any>) {
+    console.log("[AuthController] Logout - clearing session");
     session.walletAddress = undefined;
     session.email = undefined;
-    return { success: true };
+    return {
+      statusCode: 200,
+      message: "Logged out successfully",
+    };
   }
 
   @Get("refresh")

@@ -21,30 +21,30 @@ export class UsersController {
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>
   ) {}
 
-  @Put()
-  async updateProfile(
+  @Put(":walletAddress")
+  async update(
+    @Param("walletAddress") walletAddress: string,
     @Body()
     body: {
-      walletAddress?: string;
-      fullname?: string;
+      fullName?: string;
       email?: string;
       phoneNumber?: string;
       birthday?: string;
       address?: string;
       centerId?: string;
       roleId?: string;
+      centerName?: string;
     }
   ) {
-    if (!body.walletAddress) throw new Error("walletAddress is required");
     const user = await this.userRepo
       .createQueryBuilder("user")
       .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
-        walletAddress: body.walletAddress,
+        walletAddress: walletAddress,
       })
       .getOne();
     if (!user) throw new Error("User not found");
 
-    user.fullName = body.fullname ?? user.fullName;
+    user.fullName = body.fullName ?? user.fullName;
     user.email = body.email ?? user.email;
     user.phoneNumber = body.phoneNumber ?? user.phoneNumber;
     user.birthday = body.birthday ?? user.birthday;
