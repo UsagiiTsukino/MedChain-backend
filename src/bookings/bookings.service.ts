@@ -6,6 +6,7 @@ import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { Center } from "../centers/entities/center.entity";
 import { User } from "../users/entities/user.entity";
 import { Payment } from "../payments/payments.entity";
+import { Appointment } from "../appointments/appointments.entity";
 
 @Injectable()
 export class BookingsService {
@@ -19,7 +20,9 @@ export class BookingsService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(Payment)
-    private readonly paymentRepo: Repository<Payment>
+    private readonly paymentRepo: Repository<Payment>,
+    @InjectRepository(Appointment)
+    private readonly appointmentRepo: Repository<Appointment>
   ) {}
 
   async createBooking(
@@ -54,11 +57,17 @@ export class BookingsService {
     if (!center) throw new Error("Center not found");
 
     const booking = new Booking();
+    booking.patientId = patient.walletAddress;
     booking.patient = patient;
     if (request.familyMemberId) {
       booking.familyMemberId = request.familyMemberId;
     }
+    booking.vaccineId = vaccine.id;
     booking.vaccine = vaccine;
+    booking.centerId = center.id;
+    booking.center = center;
+    booking.firstDoseDate = request.firstDoseDate;
+    booking.firstDoseTime = request.firstDoseTime;
     booking.totalAmount = request.amount;
     booking.status = "PENDING";
     booking.totalDoses = (request.doseSchedules?.length || 0) + 1;
@@ -84,10 +93,20 @@ export class BookingsService {
 
     const savedPayment = await this.paymentRepo.save(payment);
 
-    // Note: Appointments will be created separately or via Appointment entity
-    // For now, return payment response
+    // For CASH payment, automatically mark as completed
+    if (request.paymentMethod === "CASH") {
+      savedPayment.status = "COMPLETED";
+      await this.paymentRepo.save(savedPayment);
+
+      // Update booking status to CONFIRMED
+      saved.status = "CONFIRMED";
+      await this.bookingRepo.save(saved);
+    }
+
+    // Return payment response (bookings table already stores the booking info)
     return {
       referenceId: saved.bookingId,
+      bookingId: saved.bookingId,
       paymentId: savedPayment.id,
       method: payment.method,
       amount: payment.amount,
@@ -161,5 +180,63 @@ export class BookingsService {
       )
       .getMany();
     return items;
+  }
+
+  async getBookingById(bookingId: string) {
+    try {
+      // Get booking without relations first (avoid collation issues)
+      const booking = await this.bookingRepo.findOne({
+        where: { bookingId },
+      });
+
+      if (!booking) {
+        throw new Error("Booking not found");
+      }
+
+      // Get patient separately with proper collation
+      const patient = await this.userRepo
+        .createQueryBuilder("user")
+        .where(
+          "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress COLLATE utf8mb4_general_ci",
+          { walletAddress: booking.patientId }
+        )
+        .getOne();
+
+      // Get vaccine
+      const vaccine = await this.vaccineRepo.findOne({
+        where: { id: booking.vaccineId },
+      });
+
+      // Get center
+      const center = await this.centerRepo.findOne({
+        where: { id: booking.centerId },
+      });
+
+      // Get payment info
+      const payment = await this.paymentRepo.findOne({
+        where: { referenceId: bookingId, referenceType: "BOOKING" as any },
+      });
+
+      return {
+        bookingId: booking.bookingId,
+        patientId: booking.patientId,
+        vaccineId: booking.vaccineId,
+        centerId: booking.centerId,
+        totalDoses: booking.totalDoses,
+        totalAmount: booking.totalAmount,
+        status: booking.status,
+        overallStatus: booking.overallStatus,
+        createdAt: booking.createdAt,
+        patient: patient || null,
+        vaccine: vaccine || null,
+        center: center || null,
+        appointmentDate: booking.firstDoseDate || null,
+        appointmentTime: booking.firstDoseTime || null,
+        payment: payment || null,
+      };
+    } catch (error) {
+      console.error("[BookingsService] Error in getBookingById:", error);
+      throw error;
+    }
   }
 }

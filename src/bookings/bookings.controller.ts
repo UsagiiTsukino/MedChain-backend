@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Query, Session } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Session,
+  HttpException,
+  HttpStatus,
+  Param,
+} from "@nestjs/common";
 import { BookingsService } from "./bookings.service";
 
 @Controller("bookings")
@@ -22,8 +32,28 @@ export class BookingsController {
     },
     @Session() session: Record<string, any>
   ) {
+    console.log("[BookingsController] Session keys:", Object.keys(session));
+    console.log("[BookingsController] Session data:", {
+      walletAddress: session?.walletAddress,
+      email: session?.email,
+      cookie: session?.cookie,
+    });
+
     const patientWalletAddress = session?.walletAddress || session?.email;
-    if (!patientWalletAddress) throw new Error("User not authenticated");
+    if (!patientWalletAddress) {
+      console.error(
+        "[BookingsController] User not authenticated. Session:",
+        session
+      );
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.UNAUTHORIZED,
+          message: "User not authenticated. Please login again.",
+          error: "Unauthorized",
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
 
     return this.bookingsService.createBooking(
       {
@@ -46,5 +76,10 @@ export class BookingsController {
       parseInt(page, 10),
       parseInt(size, 10)
     );
+  }
+
+  @Get(":id")
+  async getById(@Param("id") id: string) {
+    return this.bookingsService.getBookingById(id);
   }
 }

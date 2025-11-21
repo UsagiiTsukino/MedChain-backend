@@ -64,6 +64,7 @@ export class UsersController {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
 
+    // First, get users with pagination
     const queryBuilder = this.userRepo.createQueryBuilder("user");
     queryBuilder.where("user.isDeleted = :isDeleted", { isDeleted: false });
 
@@ -75,9 +76,49 @@ export class UsersController {
     }
 
     queryBuilder.skip(skip).take(take);
-    const [items, total] = await queryBuilder.getManyAndCount();
+    const [users, total] = await queryBuilder.getManyAndCount();
+
+    // Then, manually fetch center and role names for each user
+    const result = await Promise.all(
+      users.map(async (user) => {
+        let centerName = null;
+        let roleName = null;
+
+        if (user.centerId) {
+          const center = await this.centerRepo
+            .createQueryBuilder("center")
+            .where("center.center_id = :centerId", { centerId: user.centerId })
+            .getOne();
+          centerName = center?.name || null;
+        }
+
+        if (user.roleId) {
+          const role = await this.roleRepo
+            .createQueryBuilder("role")
+            .where("role.id = :roleId", { roleId: user.roleId })
+            .getOne();
+          roleName = role?.name || null;
+        }
+
+        return {
+          walletAddress: user.walletAddress,
+          fullName: user.fullName,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          address: user.address,
+          birthday: user.birthday,
+          centerId: user.centerId,
+          roleId: user.roleId,
+          centerName,
+          role: roleName,
+          avatar: user.avatar,
+          isDeleted: user.isDeleted,
+        };
+      })
+    );
+
     return {
-      result: items,
+      result,
       meta: {
         page: Math.floor(skip / take),
         pageSize: take,

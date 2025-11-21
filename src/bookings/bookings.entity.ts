@@ -8,6 +8,7 @@ import {
 } from "typeorm";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { User } from "../users/entities/user.entity";
+import { Center } from "../centers/entities/center.entity";
 
 @Entity("bookings")
 export class Booking {
@@ -30,6 +31,19 @@ export class Booking {
   @ManyToOne(() => Vaccine, { nullable: false })
   @JoinColumn({ name: "vaccine_id" })
   vaccine!: Vaccine;
+
+  @Column({ type: "bigint", name: "center_id" })
+  centerId!: string;
+
+  @ManyToOne(() => Center, { nullable: false })
+  @JoinColumn({ name: "center_id" })
+  center!: Center;
+
+  @Column({ type: "date", name: "first_dose_date" })
+  firstDoseDate!: string;
+
+  @Column({ type: "varchar", length: 10, name: "first_dose_time" })
+  firstDoseTime!: string;
 
   @Column({ type: "int", name: "total_doses" })
   totalDoses!: number;

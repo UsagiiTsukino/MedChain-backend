@@ -9,10 +9,19 @@ import { Booking } from "../bookings/bookings.entity";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { Center } from "../centers/entities/center.entity";
 import { Payment } from "../payments/payments.entity";
+import { Appointment } from "../appointments/appointments.entity";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Role, Booking, Vaccine, Center, Payment]),
+    TypeOrmModule.forFeature([
+      User,
+      Role,
+      Booking,
+      Vaccine,
+      Center,
+      Payment,
+      Appointment,
+    ]),
   ],
   controllers: [AuthController],
   providers: [AuthService, BookingsService],

@@ -32,15 +32,6 @@ export class VaccinesController {
     return this.vaccineRepo.findOne({ where: { id } });
   }
 
-  @Get(":id")
-  async getById(@Param("id") id: string) {
-    const vaccine = await this.vaccineRepo.findOne({
-      where: { id: BigInt(id) as any },
-    });
-    if (!vaccine) throw new Error("Vaccine not found");
-    return { ...vaccine, vaccineId: vaccine.id };
-  }
-
   @Get()
   async list(
     @Query("q") q?: string,
@@ -77,6 +68,18 @@ export class VaccinesController {
         total,
       },
     };
+  }
+
+  @Get(":id")
+  async getById(@Param("id") id: string) {
+    if (!id) {
+      throw new Error("Vaccine ID is required");
+    }
+    const vaccine = await this.vaccineRepo.findOne({
+      where: { id: BigInt(id) as any },
+    });
+    if (!vaccine) throw new Error("Vaccine not found");
+    return { ...vaccine, vaccineId: vaccine.id };
   }
 
   @Delete(":id")
