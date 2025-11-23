@@ -119,23 +119,55 @@ export class BookingsService {
     const take = Math.max(1, size);
     const skip = Math.max(0, page) * take;
 
-    // Use QueryBuilder with explicit COLLATE in join condition to avoid collation issues
-    // Join patient manually with COLLATE to fix collation mismatch
-    const queryBuilder = this.bookingRepo
-      .createQueryBuilder("booking")
-      .leftJoinAndSelect(
-        User,
-        "patient",
-        "patient.walletAddress COLLATE utf8mb4_general_ci = booking.patientId COLLATE utf8mb4_general_ci"
-      )
-      .leftJoinAndSelect(Vaccine, "vaccine", "vaccine.id = booking.vaccineId")
-      .skip(skip)
-      .take(take);
+    // Query bookings without collation issues - get relations separately
+    const [bookings, total] = await this.bookingRepo.findAndCount({
+      skip,
+      take,
+      order: { createdAt: "DESC" },
+    });
 
-    const [items, total] = await queryBuilder.getManyAndCount();
+    // Manually load relations to avoid collation mismatch
+    const enrichedBookings = await Promise.all(
+      bookings.map(async (booking) => {
+        // Load patient
+        const patient = await this.userRepo
+          .createQueryBuilder("user")
+          .where(
+            "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress COLLATE utf8mb4_general_ci",
+            { walletAddress: booking.patientId }
+          )
+          .getOne();
+
+        // Load vaccine
+        const vaccine = await this.vaccineRepo.findOne({
+          where: { id: booking.vaccineId },
+        });
+
+        // Load center
+        const center = await this.centerRepo.findOne({
+          where: { id: booking.centerId },
+        });
+
+        // Load payment
+        const payment = await this.paymentRepo.findOne({
+          where: {
+            referenceId: booking.bookingId,
+            referenceType: "BOOKING",
+          },
+        });
+
+        return {
+          ...booking,
+          patient,
+          vaccine,
+          center,
+          payment,
+        };
+      })
+    );
 
     return {
-      result: items,
+      result: enrichedBookings,
       meta: {
         page: Math.floor(skip / take),
         pageSize: take,
