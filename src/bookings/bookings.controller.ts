@@ -78,6 +78,22 @@ export class BookingsController {
     );
   }
 
+  @Get("my-history")
+  async myHistory(@Session() session: Record<string, any>) {
+    const patientWalletAddress = session?.walletAddress || session?.email;
+    if (!patientWalletAddress) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.UNAUTHORIZED,
+          message: "User not authenticated. Please login again.",
+          error: "Unauthorized",
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    return this.bookingsService.getHistoryBooking(patientWalletAddress);
+  }
+
   @Get(":id")
   async getById(@Param("id") id: string) {
     return this.bookingsService.getBookingById(id);

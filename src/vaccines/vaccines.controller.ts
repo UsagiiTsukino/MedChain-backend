@@ -72,11 +72,18 @@ export class VaccinesController {
 
   @Get(":id")
   async getById(@Param("id") id: string) {
-    if (!id) {
+    if (!id || id === "undefined" || id === "null") {
       throw new Error("Vaccine ID is required");
     }
+
+    // Validate that id is a valid number
+    const numericId = parseInt(id, 10);
+    if (isNaN(numericId)) {
+      throw new Error("Invalid vaccine ID format");
+    }
+
     const vaccine = await this.vaccineRepo.findOne({
-      where: { id: BigInt(id) as any },
+      where: { id: BigInt(numericId) as any },
     });
     if (!vaccine) throw new Error("Vaccine not found");
     return { ...vaccine, vaccineId: vaccine.id };

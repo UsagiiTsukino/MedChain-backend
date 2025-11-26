@@ -1,0 +1,261 @@
+// VaxChain Database Schema
+// Generated: November 26, 2025
+// Description: Complete database schema for VaxChain vaccination management system
+
+Project VaxChain {
+  database_type: 'MySQL'
+  Note: 'Blockchain-integrated vaccination management system with booking, appointments, and payment tracking'
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+Table users {
+  wallet_address varchar(255) [pk, note: 'Primary key - unique wallet address']
+  center_id bigint [null, ref: > centers.center_id, note: 'Associated vaccination center for staff']
+  role_id bigint [null, ref: > roles.id, note: 'User role']
+  fullname varchar(255) [null]
+  email varchar(255) [null, unique]
+  password varchar(255) [null, note: 'Hashed password']
+  refresh_token text [null, note: 'JWT refresh token']
+  avatar varchar(512) [null, note: 'Avatar image URL']
+  phone_number varchar(255) [null]
+  birthday date [null]
+  address varchar(255) [null]
+  is_deleted bit [default: 0, note: 'Soft delete flag']
+  
+  Note: 'Users table - supports both wallet-based and traditional authentication'
+  indexes {
+    email [unique]
+    (center_id, role_id) [name: 'idx_user_center_role']
+  }
+}
+
+Table roles {
+  id bigint [pk, increment, note: 'Role ID']
+  name varchar(255) [not null, note: 'Role name: ADMIN, PATIENT, DOCTOR, CASHIER']
+  
+  Note: 'User roles for access control'
+  indexes {
+    name [unique]
+  }
+}
+
+Table permissions {
+  id bigint [pk, increment]
+  name varchar(255) [not null, note: 'Permission name']
+  method varchar(255) [not null, note: 'HTTP method: GET, POST, PUT, DELETE, PATCH']
+  api_path varchar(255) [not null, note: 'API endpoint path']
+  module varchar(255) [not null, note: 'Module/feature name']
+  
+  Note: 'API permissions for role-based access control'
+  indexes {
+    (method, api_path) [unique, name: 'idx_permission_method_path']
+    module [name: 'idx_permission_module']
+  }
+}
+
+// ============================================
+// VACCINATION CENTER
+// ============================================
+
+Table centers {
+  center_id bigint [pk, increment, note: 'Center ID']
+  name varchar(255) [not null, note: 'Center name']
+  address varchar(255) [not null, note: 'Physical address']
+  capacity int [not null, note: 'Maximum patient capacity']
+  phone_number varchar(255) [null, note: 'Contact phone']
+  working_hours varchar(255) [not null, note: 'Operating hours']
+  image varchar(255) [null, note: 'Center image URL']
+  
+  Note: 'Vaccination centers'
+  indexes {
+    name [name: 'idx_center_name']
+  }
+}
+
+Table vaccines {
+  vaccine_id bigint [pk, increment, note: 'Vaccine ID']
+  name varchar(255) [not null, note: 'Vaccine name']
+  country varchar(64) [not null, note: 'Country of origin']
+  description varchar(255) [not null, note: 'Vaccine description']
+  disease varchar(255) [not null, note: 'Target disease']
+  dosage int [not null, note: 'Required number of doses']
+  efficacy varchar(255) [not null, note: 'Efficacy rate']
+  manufacturer varchar(255) [not null, note: 'Manufacturer name']
+  price varchar(255) [not null, note: 'Price per dose (VND)']
+  schedule varchar(255) [null, note: 'Recommended schedule']
+  stock_quantity int [not null, note: 'Available stock']
+  target varchar(255) [not null, note: 'Target group (children, adults, etc.)']
+  is_deleted bit [default: 0, note: 'Soft delete flag']
+  
+  Note: 'Vaccine catalog with inventory management'
+  indexes {
+    name [name: 'idx_vaccine_name']
+    disease [name: 'idx_vaccine_disease']
+    (manufacturer, country) [name: 'idx_vaccine_origin']
+  }
+}
+
+// ============================================
+// BOOKING & APPOINTMENTS
+// ============================================
+
+Table bookings {
+  booking_id bigint [pk, increment, note: 'Booking ID']
+  patient_id varchar(255) [not null, ref: > users.wallet_address, note: 'Patient wallet address']
+  family_member_id bigint [null, note: 'Family member ID if booking for dependent']
+  vaccine_id bigint [not null, ref: > vaccines.vaccine_id, note: 'Selected vaccine']
+  center_id bigint [not null, ref: > centers.center_id, note: 'Selected center']
+  first_dose_date date [not null, note: 'First dose appointment date']
+  first_dose_time varchar(10) [not null, note: 'First dose appointment time']
+  total_doses int [not null, note: 'Total doses for this booking']
+  overall_status varchar(50) [not null, note: 'Overall completion: PROGRESS, COMPLETED, CANCELLED']
+  total_amount double [not null, note: 'Total payment amount']
+  status varchar(50) [not null, note: 'Payment status: PENDING, CONFIRMED, CANCELLED']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`, note: 'Booking creation time']
+  
+  Note: 'Main booking records for vaccination courses'
+  indexes {
+    patient_id [name: 'idx_booking_patient']
+    vaccine_id [name: 'idx_booking_vaccine']
+    center_id [name: 'idx_booking_center']
+    (patient_id, status) [name: 'idx_booking_patient_status']
+    created_at [name: 'idx_booking_created']
+  }
+}
+
+Table appointments {
+  appointment_id bigint [pk, increment, note: 'Appointment ID']
+  booking_id bigint [not null, ref: > bookings.booking_id, note: 'Parent booking']
+  center_id bigint [not null, ref: > centers.center_id, note: 'Vaccination center']
+  dose_number int [not null, note: 'Dose sequence number (1, 2, 3...)']
+  appointment_date date [not null, note: 'Scheduled date']
+  appointment_time varchar(10) [not null, note: 'Scheduled time']
+  status varchar(50) [not null, note: 'Status: SCHEDULED, COMPLETED, CANCELLED, RESCHEDULED']
+  doctor_id varchar(255) [null, ref: > users.wallet_address, note: 'Assigned doctor']
+  notes text [null, note: 'Medical notes or special instructions']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`, note: 'Last update time']
+  
+  Note: 'Individual dose appointments for multi-dose vaccines'
+  indexes {
+    booking_id [name: 'idx_appointment_booking']
+    (center_id, appointment_date) [name: 'idx_appointment_schedule']
+    status [name: 'idx_appointment_status']
+    doctor_id [name: 'idx_appointment_doctor']
+  }
+}
+
+// ============================================
+// PAYMENT SYSTEM
+// ============================================
+
+Table payments {
+  id bigint [pk, increment, note: 'Payment ID']
+  reference_id bigint [null, note: 'Related entity ID (booking_id or order_id)']
+  reference_type varchar(50) [null, note: 'Entity type: BOOKING, ORDER']
+  method varchar(50) [not null, note: 'Payment method: CASH, PAYPAL, METAMASK']
+  amount double [not null, note: 'Payment amount']
+  currency varchar(10) [null, note: 'Currency: VND, USD, ETH']
+  status varchar(50) [not null, note: 'Status: INITIATED, PROCESSING, COMPLETED, FAILED']
+  appointment_hash varchar(255) [null, note: 'Legacy: Blockchain appointment hash']
+  payment_date_time datetime [null, note: 'Payment completion timestamp']
+  payment_hash varchar(255) [null, note: 'Blockchain transaction hash']
+  
+  Note: 'Payment transactions supporting multiple payment methods including blockchain'
+  indexes {
+    (reference_type, reference_id) [name: 'idx_payment_reference']
+    status [name: 'idx_payment_status']
+    method [name: 'idx_payment_method']
+    payment_hash [name: 'idx_payment_hash']
+  }
+}
+
+// ============================================
+// VACCINE MARKETPLACE (E-COMMERCE)
+// ============================================
+
+Table orders {
+  order_id bigint [pk, increment, note: 'Order ID']
+  user_id varchar(255) [not null, ref: > users.wallet_address, note: 'Customer wallet address']
+  total_amount double [not null, note: 'Total order amount']
+  item_count int [not null, note: 'Number of items in order']
+  order_date datetime [not null, note: 'Order placement time']
+  status varchar(50) [not null, note: 'Status: PENDING, PROCESSING, COMPLETED, CANCELLED']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  Note: 'Vaccine purchase orders for marketplace'
+  indexes {
+    user_id [name: 'idx_order_user']
+    status [name: 'idx_order_status']
+    order_date [name: 'idx_order_date']
+  }
+}
+
+Table order_items {
+  id int [pk, increment, note: 'Order item ID']
+  order_id bigint [not null, ref: > orders.order_id, note: 'Parent order']
+  vaccine_id bigint [not null, ref: > vaccines.vaccine_id, note: 'Ordered vaccine']
+  quantity int [not null, note: 'Quantity ordered']
+  
+  Note: 'Line items for vaccine orders'
+  indexes {
+    order_id [name: 'idx_order_item_order']
+    vaccine_id [name: 'idx_order_item_vaccine']
+  }
+}
+
+// ============================================
+// RELATIONSHIPS SUMMARY
+// ============================================
+
+// User Relationships:
+// - users.center_id -> centers.center_id (staff assignment)
+// - users.role_id -> roles.id (role assignment)
+
+// Booking Flow:
+// - bookings.patient_id -> users.wallet_address (patient)
+// - bookings.vaccine_id -> vaccines.vaccine_id (vaccine selection)
+// - bookings.center_id -> centers.center_id (center selection)
+// - appointments.booking_id -> bookings.booking_id (dose appointments)
+// - appointments.center_id -> centers.center_id (appointment location)
+// - appointments.doctor_id -> users.wallet_address (assigned doctor)
+
+// Payment Tracking:
+// - payments.reference_id -> bookings.booking_id (when reference_type = 'BOOKING')
+// - payments.reference_id -> orders.order_id (when reference_type = 'ORDER')
+
+// E-Commerce:
+// - orders.user_id -> users.wallet_address (customer)
+// - order_items.order_id -> orders.order_id (order details)
+// - order_items.vaccine_id -> vaccines.vaccine_id (product)
+
+// ============================================
+// NOTES & CONVENTIONS
+// ============================================
+
+// Primary Keys:
+// - users: wallet_address (varchar) - supports Web3 authentication
+// - All other tables: bigint auto-increment
+
+// Soft Delete:
+// - users.is_deleted
+// - vaccines.is_deleted
+
+// Timestamps:
+// - created_at: Record creation time
+// - updated_at: Last modification time
+
+// Status Enums:
+// - booking.status: PENDING, CONFIRMED, CANCELLED
+// - booking.overall_status: PROGRESS, COMPLETED, CANCELLED
+// - appointment.status: SCHEDULED, COMPLETED, CANCELLED, RESCHEDULED
+// - payment.status: INITIATED, PROCESSING, COMPLETED, FAILED
+// - order.status: PENDING, PROCESSING, COMPLETED, CANCELLED
+
+// Payment Methods:
+// - CASH: Pay at center
+// - PAYPAL: Online payment via PayPal
+// - METAMASK: Blockchain payment via MetaMask wallet

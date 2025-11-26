@@ -198,20 +198,53 @@ export class BookingsService {
   }
 
   async getHistoryBooking(patientWalletAddress: string) {
-    const items = await this.bookingRepo
-      .createQueryBuilder("booking")
-      .leftJoinAndSelect(
-        User,
-        "patient",
-        "patient.walletAddress COLLATE utf8mb4_general_ci = booking.patientId COLLATE utf8mb4_general_ci"
-      )
-      .leftJoinAndSelect(Vaccine, "vaccine", "vaccine.id = booking.vaccineId")
-      .where(
-        "patient.walletAddress COLLATE utf8mb4_general_ci = :walletAddress",
-        { walletAddress: patientWalletAddress }
-      )
-      .getMany();
-    return items;
+    // Get bookings for this patient
+    const bookings = await this.bookingRepo.find({
+      where: { patientId: patientWalletAddress },
+      order: { createdAt: "DESC" },
+    });
+
+    // Manually load relations to avoid collation mismatch
+    const enrichedBookings = await Promise.all(
+      bookings.map(async (booking) => {
+        // Load patient
+        const patient = await this.userRepo
+          .createQueryBuilder("user")
+          .where(
+            "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress COLLATE utf8mb4_general_ci",
+            { walletAddress: booking.patientId }
+          )
+          .getOne();
+
+        // Load vaccine
+        const vaccine = await this.vaccineRepo.findOne({
+          where: { id: booking.vaccineId },
+        });
+
+        // Load center
+        const center = await this.centerRepo.findOne({
+          where: { id: booking.centerId },
+        });
+
+        // Load payment
+        const payment = await this.paymentRepo.findOne({
+          where: {
+            referenceId: booking.bookingId,
+            referenceType: "BOOKING",
+          },
+        });
+
+        return {
+          ...booking,
+          patient,
+          vaccine,
+          center,
+          payment,
+        };
+      })
+    );
+
+    return enrichedBookings;
   }
 
   async getBookingById(bookingId: string) {
