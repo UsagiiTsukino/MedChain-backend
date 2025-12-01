@@ -13,6 +13,7 @@ import { FilesModule } from "./files/files.module";
 import { BookingsModule } from "./bookings/bookings.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PaymentsModule } from "./payments/payments.module";
+import { AiChatbotModule } from "./ai-chatbot/ai-chatbot.module";
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { PaymentsModule } from "./payments/payments.module";
     BookingsModule,
     OrdersModule,
     PaymentsModule,
+    AiChatbotModule,
   ],
 })
 export class AppModule {}
