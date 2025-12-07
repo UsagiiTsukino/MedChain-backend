@@ -1,12 +1,669 @@
-[
-  {
-    "type": "event",
-    "name": "AppointmentCreated",
-    "inputs": [
-      { "name": "appointmentId", "type": "uint256", "indexed": true },
-      { "name": "user", "type": "address", "indexed": true },
-      { "name": "centerId", "type": "uint256", "indexed": false }
-    ],
-    "anonymous": false
-  }
+﻿[
+    {
+        "inputs":  [
+
+                   ],
+        "stateMutability":  "nonpayable",
+        "type":  "constructor"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "appointmentId",
+                           "type":  "uint256"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "address",
+                           "name":  "patientAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "string",
+                           "name":  "centerName",
+                           "type":  "string"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "price",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "AppointmentCreated",
+        "type":  "event"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "appointmentId",
+                           "type":  "uint256"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "address",
+                           "name":  "patientAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "price",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "AppointmentRefunded",
+        "type":  "event"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "appointmentId",
+                           "type":  "uint256"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "address",
+                           "name":  "doctorAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "address",
+                           "name":  "cashierAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "enum VaccineAppointment.Status",
+                           "name":  "status",
+                           "type":  "uint8"
+                       }
+                   ],
+        "name":  "AppointmentUpdated",
+        "type":  "event"
+    },
+    {
+        "anonymous":  false,
+        "inputs":  [
+                       {
+                           "indexed":  false,
+                           "internalType":  "uint256",
+                           "name":  "appointmentId",
+                           "type":  "uint256"
+                       },
+                       {
+                           "indexed":  false,
+                           "internalType":  "enum VaccineAppointment.Status",
+                           "name":  "newStatus",
+                           "type":  "uint8"
+                       }
+                   ],
+        "name":  "StatusUpdated",
+        "type":  "event"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "string",
+                           "name":  "_vaccineName",
+                           "type":  "string"
+                       },
+                       {
+                           "internalType":  "string",
+                           "name":  "_centerName",
+                           "type":  "string"
+                       },
+                       {
+                           "internalType":  "string",
+                           "name":  "_date",
+                           "type":  "string"
+                       },
+                       {
+                           "internalType":  "string",
+                           "name":  "_time",
+                           "type":  "string"
+                       },
+                       {
+                           "internalType":  "address",
+                           "name":  "_patientAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_price",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "createAppointment",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_appointmentId",
+                           "type":  "uint256"
+                       },
+                       {
+                           "internalType":  "address",
+                           "name":  "_doctorAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "internalType":  "address",
+                           "name":  "_cashierAddress",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "processAppointment",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_appointmentId",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "completeAppointment",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "_patientAddress",
+                           "type":  "address"
+                       },
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_appointmentId",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "cancelAppointment",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_appointmentId",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "refundAppointment",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_appointmentId",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "getAppointment",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "appointmentId",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "vaccineName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "patientAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "doctorAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "cashierAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "centerName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "date",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "time",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "price",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "enum VaccineAppointment.Status",
+                                                   "name":  "status",
+                                                   "type":  "uint8"
+                                               }
+                                           ],
+                            "internalType":  "struct VaccineAppointment.Appointment",
+                            "name":  "",
+                            "type":  "tuple"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function",
+        "constant":  true
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "getAllAppointments",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "appointmentId",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "vaccineName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "patientAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "doctorAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "cashierAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "centerName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "date",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "time",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "price",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "enum VaccineAppointment.Status",
+                                                   "name":  "status",
+                                                   "type":  "uint8"
+                                               }
+                                           ],
+                            "internalType":  "struct VaccineAppointment.Appointment[]",
+                            "name":  "",
+                            "type":  "tuple[]"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function",
+        "constant":  true
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "_patientAddress",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "getAppointmentsByPatient",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "appointmentId",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "vaccineName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "patientAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "doctorAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "cashierAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "centerName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "date",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "time",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "price",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "enum VaccineAppointment.Status",
+                                                   "name":  "status",
+                                                   "type":  "uint8"
+                                               }
+                                           ],
+                            "internalType":  "struct VaccineAppointment.Appointment[]",
+                            "name":  "",
+                            "type":  "tuple[]"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function",
+        "constant":  true
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "string",
+                           "name":  "_centerName",
+                           "type":  "string"
+                       }
+                   ],
+        "name":  "getAppointmentsByCenter",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "appointmentId",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "vaccineName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "patientAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "doctorAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "cashierAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "centerName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "date",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "time",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "price",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "enum VaccineAppointment.Status",
+                                                   "name":  "status",
+                                                   "type":  "uint8"
+                                               }
+                                           ],
+                            "internalType":  "struct VaccineAppointment.Appointment[]",
+                            "name":  "",
+                            "type":  "tuple[]"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function",
+        "constant":  true
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "address",
+                           "name":  "_doctorAddress",
+                           "type":  "address"
+                       }
+                   ],
+        "name":  "getAppointmentsByDoctor",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "appointmentId",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "vaccineName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "patientAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "doctorAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "cashierAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "centerName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "date",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "time",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "price",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "enum VaccineAppointment.Status",
+                                                   "name":  "status",
+                                                   "type":  "uint8"
+                                               }
+                                           ],
+                            "internalType":  "struct VaccineAppointment.Appointment[]",
+                            "name":  "",
+                            "type":  "tuple[]"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function",
+        "constant":  true
+    },
+    {
+        "inputs":  [
+                       {
+                           "internalType":  "uint256",
+                           "name":  "_appointmentId",
+                           "type":  "uint256"
+                       }
+                   ],
+        "name":  "getAppointmentDetails",
+        "outputs":  [
+                        {
+                            "components":  [
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "appointmentId",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "vaccineName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "patientAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "doctorAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "address",
+                                                   "name":  "cashierAddress",
+                                                   "type":  "address"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "centerName",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "date",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "string",
+                                                   "name":  "time",
+                                                   "type":  "string"
+                                               },
+                                               {
+                                                   "internalType":  "uint256",
+                                                   "name":  "price",
+                                                   "type":  "uint256"
+                                               },
+                                               {
+                                                   "internalType":  "enum VaccineAppointment.Status",
+                                                   "name":  "status",
+                                                   "type":  "uint8"
+                                               }
+                                           ],
+                            "internalType":  "struct VaccineAppointment.Appointment",
+                            "name":  "",
+                            "type":  "tuple"
+                        }
+                    ],
+        "stateMutability":  "view",
+        "type":  "function",
+        "constant":  true
+    },
+    {
+        "inputs":  [
+
+                   ],
+        "name":  "clearAllAppointments",
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable",
+        "type":  "function"
+    }
 ]

@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Booking } from "./bookings.entity";
@@ -7,9 +7,12 @@ import { Center } from "../centers/entities/center.entity";
 import { User } from "../users/entities/user.entity";
 import { Payment } from "../payments/payments.entity";
 import { Appointment } from "../appointments/appointments.entity";
+import { BlockchainService } from "../blockchain/blockchain.service";
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     @InjectRepository(Booking)
     private readonly bookingRepo: Repository<Booking>,
@@ -22,7 +25,8 @@ export class BookingsService {
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(Appointment)
-    private readonly appointmentRepo: Repository<Appointment>
+    private readonly appointmentRepo: Repository<Appointment>,
+    private readonly blockchainService: BlockchainService
   ) {}
 
   async createBooking(
@@ -72,8 +76,89 @@ export class BookingsService {
     booking.status = "PENDING";
     booking.totalDoses = (request.doseSchedules?.length || 0) + 1;
     booking.overallStatus = "PROGRESS";
+    booking.blockchainStatus = "PENDING";
 
     const saved = await this.bookingRepo.save(booking);
+
+    // ============ BLOCKCHAIN INTEGRATION ============
+    // Record booking on blockchain for transparency and immutability
+    let blockchainTxHash: string | null = null;
+    let blockchainAppointmentId: string | null = null;
+
+    try {
+      if (this.blockchainService.contract) {
+        this.logger.log(
+          `Recording booking ${saved.bookingId} on blockchain...`
+        );
+
+        // Validate wallet address before calling contract
+        const { ethers } = await import("ethers");
+        let patientAddr = patient.walletAddress;
+
+        // Check if it's a valid Ethereum address
+        if (!ethers.isAddress(patientAddr)) {
+          this.logger.warn(
+            `Invalid patient wallet address: ${patientAddr}, skipping blockchain`
+          );
+          saved.blockchainStatus = "SKIPPED";
+          await this.bookingRepo.save(saved);
+        } else {
+          // Ensure address is checksummed
+          patientAddr = ethers.getAddress(patientAddr);
+
+          // Call smart contract to create appointment
+          const tx = await this.blockchainService.contract.createAppointment(
+            vaccine.name,
+            center.name,
+            request.firstDoseDate,
+            request.firstDoseTime,
+            patientAddr,
+            Math.round(request.amount) // price in VND as uint256
+          );
+
+          // Wait for transaction confirmation
+          const receipt = await tx.wait();
+          blockchainTxHash = receipt.hash || receipt.transactionHash;
+
+          // Parse event to get appointmentId
+          const event = receipt.logs?.find((log: any) => {
+            try {
+              const parsed =
+                this.blockchainService.contract.interface.parseLog(log);
+              return parsed?.name === "AppointmentCreated";
+            } catch {
+              return false;
+            }
+          });
+
+          if (event) {
+            const parsed =
+              this.blockchainService.contract.interface.parseLog(event);
+            blockchainAppointmentId = parsed?.args?.appointmentId?.toString();
+          }
+
+          // Update booking with blockchain info
+          saved.blockchainTxHash = blockchainTxHash;
+          saved.blockchainAppointmentId = blockchainAppointmentId;
+          saved.blockchainStatus = "CONFIRMED";
+          await this.bookingRepo.save(saved);
+
+          this.logger.log(
+            `Blockchain record created: txHash=${blockchainTxHash}, appointmentId=${blockchainAppointmentId}`
+          );
+        }
+      } else {
+        this.logger.warn("Blockchain not available, skipping on-chain record");
+        saved.blockchainStatus = "SKIPPED";
+        await this.bookingRepo.save(saved);
+      }
+    } catch (blockchainError) {
+      this.logger.error(`Blockchain error: ${blockchainError}`);
+      saved.blockchainStatus = "FAILED";
+      await this.bookingRepo.save(saved);
+      // Don't throw - booking is still valid in database
+    }
+    // ============ END BLOCKCHAIN INTEGRATION ============
 
     // Create payment
     const payment = new Payment();
@@ -112,6 +197,12 @@ export class BookingsService {
       amount: payment.amount,
       paymentURL:
         request.paymentMethod === "PAYPAL" ? "http://paypal.com/..." : null,
+      // Blockchain info
+      blockchain: {
+        txHash: blockchainTxHash,
+        appointmentId: blockchainAppointmentId,
+        status: saved.blockchainStatus,
+      },
     };
   }
 
@@ -298,10 +389,59 @@ export class BookingsService {
         appointmentDate: booking.firstDoseDate || null,
         appointmentTime: booking.firstDoseTime || null,
         payment: payment || null,
+        // Blockchain info
+        blockchain: {
+          txHash: booking.blockchainTxHash || null,
+          appointmentId: booking.blockchainAppointmentId || null,
+          status: booking.blockchainStatus || null,
+        },
       };
     } catch (error) {
       console.error("[BookingsService] Error in getBookingById:", error);
       throw error;
+    }
+  }
+
+  // ============ BLOCKCHAIN VERIFICATION ============
+  async verifyBookingOnChain(bookingId: string) {
+    const booking = await this.bookingRepo.findOne({ where: { bookingId } });
+    if (!booking) throw new Error("Booking not found");
+    if (!booking.blockchainAppointmentId) {
+      return { verified: false, reason: "No blockchain record" };
+    }
+
+    try {
+      if (!this.blockchainService.contract) {
+        return { verified: false, reason: "Blockchain not available" };
+      }
+
+      const onChainData = await this.blockchainService.contract.getAppointment(
+        BigInt(booking.blockchainAppointmentId)
+      );
+
+      return {
+        verified: true,
+        onChainData: {
+          appointmentId: onChainData.appointmentId.toString(),
+          vaccineName: onChainData.vaccineName,
+          centerName: onChainData.centerName,
+          patientAddress: onChainData.patientAddress,
+          date: onChainData.date,
+          time: onChainData.time,
+          price: onChainData.price.toString(),
+          status: [
+            "PENDING",
+            "PROCESSING",
+            "COMPLETED",
+            "CANCELLED",
+            "REFUNDED",
+          ][onChainData.status],
+        },
+        txHash: booking.blockchainTxHash,
+      };
+    } catch (error) {
+      this.logger.error(`Verification error: ${error}`);
+      return { verified: false, reason: "Failed to verify on chain" };
     }
   }
 }

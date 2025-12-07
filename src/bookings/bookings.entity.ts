@@ -57,6 +57,26 @@ export class Booking {
   @Column({ type: "varchar", length: 50 })
   status!: string; // PENDING, CONFIRMED, CANCELLED
 
+  // Blockchain fields
+  @Column({
+    type: "varchar",
+    length: 255,
+    name: "blockchain_tx_hash",
+    nullable: true,
+  })
+  blockchainTxHash?: string | null;
+
+  @Column({ type: "bigint", name: "blockchain_appointment_id", nullable: true })
+  blockchainAppointmentId?: string | null;
+
+  @Column({
+    type: "varchar",
+    length: 50,
+    name: "blockchain_status",
+    nullable: true,
+  })
+  blockchainStatus?: string | null; // PENDING, CONFIRMED, FAILED
+
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 }

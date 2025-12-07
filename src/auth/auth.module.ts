@@ -10,6 +10,7 @@ import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { Center } from "../centers/entities/center.entity";
 import { Payment } from "../payments/payments.entity";
 import { Appointment } from "../appointments/appointments.entity";
+import { BlockchainModule } from "../blockchain/blockchain.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { Appointment } from "../appointments/appointments.entity";
       Payment,
       Appointment,
     ]),
+    BlockchainModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, BookingsService],

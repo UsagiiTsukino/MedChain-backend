@@ -8,6 +8,7 @@ import { Center } from "../centers/entities/center.entity";
 import { User } from "../users/entities/user.entity";
 import { Payment } from "../payments/payments.entity";
 import { Appointment } from "../appointments/appointments.entity";
+import { BlockchainModule } from "../blockchain/blockchain.module";
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { Appointment } from "../appointments/appointments.entity";
       Payment,
       Appointment,
     ]),
+    BlockchainModule,
   ],
   controllers: [BookingsController],
   providers: [BookingsService],

@@ -98,4 +98,9 @@ export class BookingsController {
   async getById(@Param("id") id: string) {
     return this.bookingsService.getBookingById(id);
   }
+
+  @Get(":id/verify")
+  async verifyOnChain(@Param("id") id: string) {
+    return this.bookingsService.verifyBookingOnChain(id);
+  }
 }
