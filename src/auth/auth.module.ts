@@ -8,7 +8,7 @@ import { BookingsService } from "../bookings/bookings.service";
 import { Booking } from "../bookings/bookings.entity";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { Center } from "../centers/entities/center.entity";
-import { Payment } from "../payments/payments.entity";
+import { BookingPayment } from "../payments/entities/booking-payment.entity";
 import { Appointment } from "../appointments/appointments.entity";
 import { BlockchainModule } from "../blockchain/blockchain.module";
 
@@ -20,7 +20,7 @@ import { BlockchainModule } from "../blockchain/blockchain.module";
       Booking,
       Vaccine,
       Center,
-      Payment,
+      BookingPayment,
       Appointment,
     ]),
     BlockchainModule,

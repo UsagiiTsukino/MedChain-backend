@@ -28,8 +28,16 @@ export class CentersController {
 
   @Put(":id")
   async update(@Param("id") id: string, @Body() body: Partial<Center>) {
-    await this.centerRepo.update({ id }, body);
-    return this.centerRepo.findOne({ where: { id } });
+    const numericId = BigInt(id);
+    const center = await this.centerRepo.findOne({
+      where: { id: numericId as any },
+    });
+    if (!center) throw new Error("Center not found");
+
+    // Update fields
+    Object.assign(center, body);
+    const saved = await this.centerRepo.save(center);
+    return { ...saved, centerId: saved.id };
   }
 
   @Get(":id")
@@ -81,7 +89,15 @@ export class CentersController {
 
   @Delete(":id")
   async remove(@Param("id") id: string) {
-    await this.centerRepo.delete({ id: BigInt(id) as any });
+    const numericId = BigInt(id);
+    const center = await this.centerRepo.findOne({
+      where: { id: numericId as any },
+    });
+    if (!center) throw new Error("Center not found");
+
+    // Check if center has associated users or bookings
+    // If yes, you might want to prevent deletion or cascade properly
+    await this.centerRepo.remove(center);
     return { id };
   }
 }

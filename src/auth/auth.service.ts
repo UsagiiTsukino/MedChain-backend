@@ -185,6 +185,53 @@ export class AuthService {
     };
   }
 
+  async linkWallet(identifier: string, newWalletAddress: string) {
+    // Find user by current wallet or email
+    const user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :value", {
+        value: identifier,
+      })
+      .orWhere("user.email COLLATE utf8mb4_general_ci = :value", {
+        value: identifier,
+      })
+      .getOne();
+
+    if (!user) {
+      throw new HttpException("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    // Check if new wallet address is already used by another user
+    const existingUser = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress", {
+        walletAddress: newWalletAddress,
+      })
+      .andWhere("user.email != :email", { email: user.email })
+      .getOne();
+
+    if (existingUser) {
+      throw new HttpException(
+        "Wallet address already linked to another account",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Update wallet address
+    user.walletAddress = newWalletAddress;
+    await this.usersRepo.save(user);
+
+    return {
+      statusCode: 200,
+      message: "Wallet linked successfully",
+      data: {
+        walletAddress: user.walletAddress,
+        email: user.email,
+        fullName: user.fullName,
+      },
+    };
+  }
+
   async refresh(refreshToken: string) {
     const user = await this.usersRepo
       .createQueryBuilder("user")
@@ -193,11 +240,95 @@ export class AuthService {
       })
       .getOne();
     if (!user) {
-      throw new HttpException("Invalid refresh token", HttpStatus.UNAUTHORIZED);
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.UNAUTHORIZED,
+          message: "Invalid or expired refresh token. Please login again.",
+          error: "Unauthorized",
+        },
+        HttpStatus.UNAUTHORIZED
+      );
     }
 
     return {
       accessToken: crypto.randomBytes(32).toString("hex"),
+    };
+  }
+
+  async linkMetaMask(identifier: string, metamaskWallet: string) {
+    console.log("[AuthService] linkMetaMask called:", {
+      identifier,
+      metamaskWallet,
+    });
+
+    // Find user by wallet_address or email
+    let user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where("user.walletAddress COLLATE utf8mb4_general_ci = :identifier", {
+        identifier,
+      })
+      .orWhere("user.email COLLATE utf8mb4_general_ci = :identifier", {
+        identifier,
+      })
+      .getOne();
+
+    console.log(
+      "[AuthService] User found:",
+      user
+        ? {
+            walletAddress: user.walletAddress,
+            email: user.email,
+            currentMetamaskWallet: user.metamaskWallet,
+          }
+        : "NOT FOUND"
+    );
+
+    if (!user) {
+      throw new HttpException("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    // Check if MetaMask wallet is already linked to another user
+    const existingUser = await this.usersRepo
+      .createQueryBuilder("user")
+      .where(
+        "user.metamaskWallet COLLATE utf8mb4_general_ci = :metamaskWallet",
+        {
+          metamaskWallet,
+        }
+      )
+      .andWhere("user.walletAddress != :currentWallet", {
+        currentWallet: user.walletAddress,
+      })
+      .getOne();
+
+    if (existingUser) {
+      throw new HttpException(
+        "This MetaMask wallet is already linked to another account",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    // Update MetaMask wallet
+    user.metamaskWallet = metamaskWallet;
+    console.log(
+      "[AuthService] Saving user with metamaskWallet:",
+      metamaskWallet
+    );
+    const savedUser = await this.usersRepo.save(user);
+    console.log("[AuthService] User saved successfully:", {
+      walletAddress: savedUser.walletAddress,
+      metamaskWallet: savedUser.metamaskWallet,
+    });
+
+    return {
+      statusCode: 200,
+      message: "MetaMask wallet linked successfully",
+      data: {
+        walletAddress: savedUser.walletAddress,
+        metamaskWallet: savedUser.metamaskWallet,
+        email: savedUser.email,
+        fullName: savedUser.fullName,
+      },
     };
   }
 }

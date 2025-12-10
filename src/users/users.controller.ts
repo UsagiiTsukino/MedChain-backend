@@ -131,7 +131,7 @@ export class UsersController {
   @Delete(":walletAddress")
   async remove(@Param("walletAddress") walletAddress: string) {
     // Use QueryBuilder to avoid collation issues
-    await this.userRepo
+    const result = await this.userRepo
       .createQueryBuilder()
       .update()
       .set({ isDeleted: true })
@@ -139,7 +139,12 @@ export class UsersController {
         walletAddress,
       })
       .execute();
-    return { walletAddress };
+
+    return {
+      statusCode: 200,
+      message: "User deleted successfully",
+      data: { walletAddress, affected: result.affected },
+    };
   }
 
   @Get("doctors")

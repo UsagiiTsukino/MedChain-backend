@@ -26,10 +26,19 @@ export class VaccinesController {
 
   @Put(":id")
   async update(@Param("id") id: string, @Body() body: Partial<Vaccine>) {
+    const numericId = BigInt(id);
+    const vaccine = await this.vaccineRepo.findOne({
+      where: { id: numericId as any },
+    });
+    if (!vaccine) throw new Error("Vaccine not found");
+
     // Remove 'image' field if present (it might be 'imageUrl' instead)
     const { image, ...updateData } = body as any;
-    await this.vaccineRepo.update({ id }, updateData);
-    return this.vaccineRepo.findOne({ where: { id } });
+
+    // Update fields
+    Object.assign(vaccine, updateData);
+    const saved = await this.vaccineRepo.save(vaccine);
+    return { ...saved, vaccineId: saved.id };
   }
 
   @Get()
@@ -91,7 +100,15 @@ export class VaccinesController {
 
   @Delete(":id")
   async remove(@Param("id") id: string) {
-    await this.vaccineRepo.delete({ id });
+    const numericId = BigInt(id);
+    const vaccine = await this.vaccineRepo.findOne({
+      where: { id: numericId as any },
+    });
+    if (!vaccine) throw new Error("Vaccine not found");
+
+    // Soft delete
+    vaccine.isDeleted = true;
+    await this.vaccineRepo.save(vaccine);
     return { id };
   }
 }

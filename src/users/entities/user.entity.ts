@@ -7,6 +7,14 @@ export class User {
   @PrimaryColumn({ type: "varchar", length: 255, name: "wallet_address" })
   walletAddress!: string;
 
+  @Column({
+    type: "varchar",
+    length: 255,
+    name: "metamask_wallet",
+    nullable: true,
+  })
+  metamaskWallet?: string | null;
+
   @Column({ type: "bigint", name: "center_id", nullable: true })
   centerId?: string | null;
 

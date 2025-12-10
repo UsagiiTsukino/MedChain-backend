@@ -5,7 +5,7 @@ import { Order } from "./orders.entity";
 import { OrderItem } from "./order-item.entity";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { User } from "../users/entities/user.entity";
-import { Payment } from "../payments/payments.entity";
+import { OrderPayment } from "../payments/entities/order-payment.entity";
 
 @Injectable()
 export class OrdersService {
@@ -18,8 +18,8 @@ export class OrdersService {
     private readonly vaccineRepo: Repository<Vaccine>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-    @InjectRepository(Payment)
-    private readonly paymentRepo: Repository<Payment>
+    @InjectRepository(OrderPayment)
+    private readonly orderPaymentRepo: Repository<OrderPayment>
   ) {}
 
   async createOrder(
@@ -64,9 +64,8 @@ export class OrdersService {
     const saved = await this.orderRepo.save(order);
 
     // Create payment
-    const payment = new Payment();
-    payment.referenceId = saved.orderId;
-    payment.referenceType = "ORDER";
+    const payment = new OrderPayment();
+    payment.orderId = saved.orderId;
     payment.method = request.paymentMethod;
     payment.amount = request.totalAmount;
     payment.currency = request.paymentMethod === "PAYPAL" ? "USD" : "VND";
@@ -76,9 +75,10 @@ export class OrdersService {
       payment.amount = request.totalAmount * 0.000041;
     } else if (request.paymentMethod === "METAMASK") {
       payment.amount = request.totalAmount / 200000.0;
+      payment.currency = "ETH";
     }
 
-    const savedPayment = await this.paymentRepo.save(payment);
+    const savedPayment = await this.orderPaymentRepo.save(payment);
 
     return {
       referenceId: saved.orderId,

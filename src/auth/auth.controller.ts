@@ -7,9 +7,11 @@ import {
   Headers,
   HttpException,
   HttpStatus,
+  Res,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { BookingsService } from "../bookings/bookings.service";
+import { Response } from "express";
 
 @Controller("auth")
 export class AuthController {
@@ -112,13 +114,57 @@ export class AuthController {
     };
   }
 
+  @Post("link-wallet")
+  async linkWallet(
+    @Body() dto: { walletAddress: string },
+    @Session() session: Record<string, any>
+  ) {
+    const identifier = session?.walletAddress || session?.email;
+    if (!identifier) {
+      throw new HttpException("Not authenticated", HttpStatus.UNAUTHORIZED);
+    }
+
+    try {
+      const result = await this.authService.linkWallet(
+        identifier,
+        dto.walletAddress
+      );
+      // Update session with new wallet address
+      session.walletAddress = dto.walletAddress;
+      return result;
+    } catch (error) {
+      console.error("[AuthController] Link wallet error:", error);
+      throw new HttpException(
+        (error as Error).message || "Failed to link wallet",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   @Get("refresh")
-  async refresh(@Headers("cookie") cookieHeader?: string) {
+  async refresh(
+    @Headers("cookie") cookieHeader?: string,
+    @Res({ passthrough: true }) response?: Response
+  ) {
     const refreshToken = cookieHeader
       ?.split(";")
       .find((c) => c.trim().startsWith("refresh_token="))
       ?.split("=")[1];
-    if (!refreshToken) throw new Error("Missing refresh token");
+
+    if (!refreshToken) {
+      // Clear cookies and return 401 to trigger frontend logout
+      response?.clearCookie("refresh_token");
+      response?.clearCookie("access_token");
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.UNAUTHORIZED,
+          message: "Refresh token missing. Please login again.",
+          error: "Unauthorized",
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
     return this.authService.refresh(refreshToken);
   }
 
@@ -144,5 +190,31 @@ export class AuthController {
       throw new HttpException("Not authenticated", HttpStatus.UNAUTHORIZED);
     }
     return this.bookingsService.getHistoryBooking(identifier);
+  }
+
+  @Post("link-metamask")
+  async linkMetaMask(
+    @Body() body: { metamaskWallet: string },
+    @Session() session: Record<string, any>
+  ) {
+    console.log("[AuthController] Link MetaMask request:", {
+      metamaskWallet: body.metamaskWallet,
+      sessionData: {
+        walletAddress: session?.walletAddress,
+        email: session?.email,
+      },
+    });
+
+    const identifier = session?.walletAddress || session?.email;
+    if (!identifier) {
+      throw new HttpException("Not authenticated", HttpStatus.UNAUTHORIZED);
+    }
+
+    const result = await this.authService.linkMetaMask(
+      identifier,
+      body.metamaskWallet
+    );
+    console.log("[AuthController] Link MetaMask success:", result);
+    return result;
   }
 }

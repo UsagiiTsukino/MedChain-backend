@@ -5,7 +5,7 @@ import { Booking } from "./bookings.entity";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { Center } from "../centers/entities/center.entity";
 import { User } from "../users/entities/user.entity";
-import { Payment } from "../payments/payments.entity";
+import { BookingPayment } from "../payments/entities/booking-payment.entity";
 import { Appointment } from "../appointments/appointments.entity";
 import { BlockchainService } from "../blockchain/blockchain.service";
 
@@ -22,8 +22,8 @@ export class BookingsService {
     private readonly centerRepo: Repository<Center>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-    @InjectRepository(Payment)
-    private readonly paymentRepo: Repository<Payment>,
+    @InjectRepository(BookingPayment)
+    private readonly bookingPaymentRepo: Repository<BookingPayment>,
     @InjectRepository(Appointment)
     private readonly appointmentRepo: Repository<Appointment>,
     private readonly blockchainService: BlockchainService
@@ -86,74 +86,103 @@ export class BookingsService {
     let blockchainAppointmentId: string | null = null;
 
     try {
-      if (this.blockchainService.contract) {
+      if (!this.blockchainService.contract) {
+        this.logger.warn(
+          "Blockchain contract not initialized. Check if Ganache is running and .env is configured correctly."
+        );
+        this.logger.warn(`- RPC_URL: ${process.env.RPC_URL}`);
+        this.logger.warn(`- CONTRACT_ADDRESS: ${process.env.CONTRACT_ADDRESS}`);
+        this.logger.warn(
+          `- BLOCKCHAIN_ENABLED: ${process.env.BLOCKCHAIN_ENABLED}`
+        );
+        saved.blockchainStatus = "SKIPPED";
+        await this.bookingRepo.save(saved);
+      } else {
         this.logger.log(
           `Recording booking ${saved.bookingId} on blockchain...`
         );
+        this.logger.log(`- Patient wallet: ${patient.walletAddress}`);
+        this.logger.log(
+          `- Patient MetaMask: ${patient.metamaskWallet || "Not connected"}`
+        );
+        this.logger.log(
+          `- Contract address: ${this.blockchainService.contract.target}`
+        );
 
-        // Validate wallet address before calling contract
-        const { ethers } = await import("ethers");
-        let patientAddr = patient.walletAddress;
-
-        // Check if it's a valid Ethereum address
-        if (!ethers.isAddress(patientAddr)) {
+        // Use MetaMask wallet if available, otherwise skip blockchain
+        if (!patient.metamaskWallet) {
           this.logger.warn(
-            `Invalid patient wallet address: ${patientAddr}, skipping blockchain`
+            `User has not connected MetaMask wallet, skipping blockchain`
           );
           saved.blockchainStatus = "SKIPPED";
           await this.bookingRepo.save(saved);
         } else {
-          // Ensure address is checksummed
-          patientAddr = ethers.getAddress(patientAddr);
+          // Validate wallet address before calling contract
+          const { ethers } = await import("ethers");
+          let patientAddr = patient.metamaskWallet;
 
-          // Call smart contract to create appointment
-          const tx = await this.blockchainService.contract.createAppointment(
-            vaccine.name,
-            center.name,
-            request.firstDoseDate,
-            request.firstDoseTime,
-            patientAddr,
-            Math.round(request.amount) // price in VND as uint256
-          );
+          // Check if it's a valid Ethereum address
+          if (!ethers.isAddress(patientAddr)) {
+            this.logger.warn(
+              `Invalid MetaMask wallet address: ${patientAddr}, skipping blockchain`
+            );
+            saved.blockchainStatus = "SKIPPED";
+            await this.bookingRepo.save(saved);
+          } else {
+            // Ensure address is checksummed
+            patientAddr = ethers.getAddress(patientAddr);
 
-          // Wait for transaction confirmation
-          const receipt = await tx.wait();
-          blockchainTxHash = receipt.hash || receipt.transactionHash;
+            // Call smart contract to create appointment
+            const tx = await this.blockchainService.contract.createAppointment(
+              vaccine.name,
+              center.name,
+              request.firstDoseDate,
+              request.firstDoseTime,
+              patientAddr,
+              Math.round(request.amount) // price in VND as uint256
+            );
 
-          // Parse event to get appointmentId
-          const event = receipt.logs?.find((log: any) => {
-            try {
+            // Wait for transaction confirmation
+            const receipt = await tx.wait();
+            blockchainTxHash = receipt.hash || receipt.transactionHash;
+
+            // Parse event to get appointmentId
+            const event = receipt.logs?.find((log: any) => {
+              try {
+                const parsed =
+                  this.blockchainService.contract.interface.parseLog(log);
+                return parsed?.name === "AppointmentCreated";
+              } catch {
+                return false;
+              }
+            });
+
+            if (event) {
               const parsed =
-                this.blockchainService.contract.interface.parseLog(log);
-              return parsed?.name === "AppointmentCreated";
-            } catch {
-              return false;
+                this.blockchainService.contract.interface.parseLog(event);
+              blockchainAppointmentId = parsed?.args?.appointmentId?.toString();
             }
-          });
 
-          if (event) {
-            const parsed =
-              this.blockchainService.contract.interface.parseLog(event);
-            blockchainAppointmentId = parsed?.args?.appointmentId?.toString();
+            // Update booking with blockchain info
+            saved.blockchainTxHash = blockchainTxHash;
+            saved.blockchainAppointmentId = blockchainAppointmentId;
+            saved.blockchainStatus = "CONFIRMED";
+            await this.bookingRepo.save(saved);
+
+            this.logger.log(
+              `Blockchain record created: txHash=${blockchainTxHash}, appointmentId=${blockchainAppointmentId}`
+            );
           }
-
-          // Update booking with blockchain info
-          saved.blockchainTxHash = blockchainTxHash;
-          saved.blockchainAppointmentId = blockchainAppointmentId;
-          saved.blockchainStatus = "CONFIRMED";
-          await this.bookingRepo.save(saved);
-
-          this.logger.log(
-            `Blockchain record created: txHash=${blockchainTxHash}, appointmentId=${blockchainAppointmentId}`
-          );
         }
-      } else {
-        this.logger.warn("Blockchain not available, skipping on-chain record");
-        saved.blockchainStatus = "SKIPPED";
-        await this.bookingRepo.save(saved);
       }
-    } catch (blockchainError) {
-      this.logger.error(`Blockchain error: ${blockchainError}`);
+    } catch (blockchainError: any) {
+      this.logger.error(`Blockchain error for booking ${saved.bookingId}:`);
+      this.logger.error(
+        `- Error message: ${blockchainError?.message || blockchainError}`
+      );
+      this.logger.error(
+        `- Error stack: ${blockchainError?.stack || "No stack trace"}`
+      );
       saved.blockchainStatus = "FAILED";
       await this.bookingRepo.save(saved);
       // Don't throw - booking is still valid in database
@@ -161,27 +190,32 @@ export class BookingsService {
     // ============ END BLOCKCHAIN INTEGRATION ============
 
     // Create payment
-    const payment = new Payment();
-    payment.referenceId = saved.bookingId;
-    payment.referenceType = "BOOKING";
+    const payment = new BookingPayment();
+    payment.bookingId = saved.bookingId;
+    payment.booking = saved;
     payment.method = request.paymentMethod;
-    payment.amount = request.amount;
-    payment.currency = request.paymentMethod === "PAYPAL" ? "USD" : "VND";
     payment.status = "INITIATED";
 
-    // Calculate payment amount based on method
+    // Calculate payment amount and currency based on method
     if (request.paymentMethod === "PAYPAL") {
       payment.amount = request.amount * 0.000041; // EXCHANGE_RATE_TO_USD
+      payment.currency = "USD";
     } else if (request.paymentMethod === "METAMASK") {
-      payment.amount = Math.round(request.amount / 200000.0);
+      // Convert VND to ETH (1 ETH = 10,000 VND in demo)
+      payment.amount = request.amount / 10000.0;
+      payment.currency = "ETH";
+    } else {
+      // CASH or BANK_TRANSFER - keep VND
+      payment.amount = request.amount;
+      payment.currency = "VND";
     }
 
-    const savedPayment = await this.paymentRepo.save(payment);
+    const savedPayment = await this.bookingPaymentRepo.save(payment);
 
     // For CASH payment, automatically mark as completed
     if (request.paymentMethod === "CASH") {
       savedPayment.status = "COMPLETED";
-      await this.paymentRepo.save(savedPayment);
+      await this.bookingPaymentRepo.save(savedPayment);
 
       // Update booking status to CONFIRMED
       saved.status = "CONFIRMED";
@@ -240,10 +274,9 @@ export class BookingsService {
         });
 
         // Load payment
-        const payment = await this.paymentRepo.findOne({
+        const payment = await this.bookingPaymentRepo.findOne({
           where: {
-            referenceId: booking.bookingId,
-            referenceType: "BOOKING",
+            bookingId: booking.bookingId,
           },
         });
 
@@ -318,10 +351,9 @@ export class BookingsService {
         });
 
         // Load payment
-        const payment = await this.paymentRepo.findOne({
+        const payment = await this.bookingPaymentRepo.findOne({
           where: {
-            referenceId: booking.bookingId,
-            referenceType: "BOOKING",
+            bookingId: booking.bookingId,
           },
         });
 
@@ -369,8 +401,8 @@ export class BookingsService {
       });
 
       // Get payment info
-      const payment = await this.paymentRepo.findOne({
-        where: { referenceId: bookingId, referenceType: "BOOKING" as any },
+      const payment = await this.bookingPaymentRepo.findOne({
+        where: { bookingId: bookingId },
       });
 
       return {
