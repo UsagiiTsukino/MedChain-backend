@@ -43,6 +43,19 @@ export class AppointmentsController {
     );
   }
 
+  @Put(":id/accept")
+  acceptAppointment(
+    @Param("id") id: string,
+    @Session() session: Record<string, any>
+  ) {
+    const appointmentId = BigInt(id);
+    const doctorId = session?.walletAddress || session?.email;
+    if (!doctorId) {
+      throw new Error("Doctor not authenticated");
+    }
+    return this.appointmentsService.confirmAcceptance(appointmentId, doctorId);
+  }
+
   @Put(":id/complete")
   complete(@Param("id") id: string) {
     const appointmentId = BigInt(id);
@@ -55,15 +68,67 @@ export class AppointmentsController {
     return this.appointmentsService.cancel(appointmentId);
   }
 
-  // Additional endpoints to match frontend contract (temporary stubs/minimal)
+  @Put(":id/unassign-doctor")
+  unassignDoctor(@Param("id") id: string) {
+    const appointmentId = BigInt(id);
+    return this.appointmentsService.unassignDoctor(appointmentId);
+  }
+
+  // Get all appointments (admin)
   @Get()
   list() {
     return { items: [] };
   }
 
+  // Get appointments by center (staff/cashier)
   @Get("center")
-  listByCenter(@Query() query: any) {
-    return { items: [], query };
+  async listByCenter(
+    @Query("centerId") centerId: string,
+    @Query("page") page = "0",
+    @Query("size") size = "10"
+  ) {
+    if (!centerId) {
+      return {
+        result: [],
+        meta: { page: 0, pageSize: 10, total: 0, pages: 0 },
+      };
+    }
+    return this.appointmentsService.getAppointmentsByCenter(
+      centerId,
+      parseInt(page, 10),
+      parseInt(size, 10)
+    );
+  }
+
+  // Get doctor's schedule - MUST be before :hash route
+  @Get("my-schedules")
+  async mySchedules(
+    @Session() session: Record<string, any>,
+    @Query("page") page = "0",
+    @Query("size") size = "10"
+  ) {
+    console.log("[my-schedules] Session:", JSON.stringify(session));
+    const doctorId = session?.walletAddress || session?.email;
+    console.log("[my-schedules] DoctorId extracted:", doctorId);
+
+    if (!doctorId) {
+      console.log("[my-schedules] No doctorId found, returning empty result");
+      return {
+        result: [],
+        meta: { page: 0, pageSize: 10, total: 0, pages: 0 },
+      };
+    }
+
+    console.log(
+      `[my-schedules] Fetching schedules for doctor: ${doctorId}, page: ${page}, size: ${size}`
+    );
+    const result = await this.appointmentsService.getMySchedule(
+      doctorId,
+      parseInt(page, 10),
+      parseInt(size, 10)
+    );
+    console.log(`[my-schedules] Found ${result.meta.total} appointments`);
+    return result;
   }
 
   @Get(":hash")
@@ -84,11 +149,6 @@ export class AppointmentsController {
   @Get(":id/verify")
   verifyId(@Param("id") id: string) {
     return { id, valid: true };
-  }
-
-  @Get("my-schedules")
-  mySchedules() {
-    return { items: [] };
   }
 
   @Put("")

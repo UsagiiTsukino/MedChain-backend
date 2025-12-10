@@ -57,6 +57,9 @@ export class Booking {
   @Column({ type: "varchar", length: 50 })
   status!: string; // PENDING, CONFIRMED, CANCELLED
 
+  @Column({ type: "boolean", name: "doctor_assigned", default: false })
+  doctorAssigned!: boolean; // Track if doctor has been assigned
+
   // Blockchain fields
   @Column({
     type: "varchar",

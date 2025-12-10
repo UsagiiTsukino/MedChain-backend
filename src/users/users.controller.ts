@@ -21,6 +21,25 @@ export class UsersController {
     @InjectRepository(Role) private readonly roleRepo: Repository<Role>
   ) {}
 
+  /**
+   * Convert date from DD/MM/YYYY to YYYY-MM-DD format for MySQL
+   */
+  private convertDateFormat(dateString: string): string {
+    // Check if already in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+
+    // Convert from DD/MM/YYYY to YYYY-MM-DD
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+      const [day, month, year] = dateString.split("/");
+      return `${year}-${month}-${day}`;
+    }
+
+    // If format is unrecognized, return as-is (will fail validation)
+    return dateString;
+  }
+
   @Put(":walletAddress")
   async update(
     @Param("walletAddress") walletAddress: string,
@@ -34,6 +53,7 @@ export class UsersController {
       centerId?: string;
       roleId?: string;
       centerName?: string;
+      role?: string;
     }
   ) {
     const user = await this.userRepo
@@ -47,10 +67,41 @@ export class UsersController {
     user.fullName = body.fullName ?? user.fullName;
     user.email = body.email ?? user.email;
     user.phoneNumber = body.phoneNumber ?? user.phoneNumber;
-    user.birthday = body.birthday ?? user.birthday;
+
+    // Convert birthday from DD/MM/YYYY to YYYY-MM-DD if provided
+    if (body.birthday) {
+      user.birthday = this.convertDateFormat(body.birthday);
+    }
+
     user.address = body.address ?? user.address;
     if (body.centerId) user.centerId = body.centerId;
     if (body.roleId) user.roleId = body.roleId;
+
+    // Handle centerName by looking up centerId
+    if (body.centerName) {
+      const center = await this.centerRepo
+        .createQueryBuilder("center")
+        .where("center.name COLLATE utf8mb4_general_ci = :name", {
+          name: body.centerName,
+        })
+        .getOne();
+      if (center) {
+        user.centerId = center.id;
+      }
+    }
+
+    // Handle role name by looking up roleId
+    if (body.role) {
+      const role = await this.roleRepo
+        .createQueryBuilder("role")
+        .where("role.name COLLATE utf8mb4_general_ci = :name", {
+          name: body.role,
+        })
+        .getOne();
+      if (role) {
+        user.roleId = role.id;
+      }
+    }
 
     return this.userRepo.save(user);
   }
@@ -148,7 +199,11 @@ export class UsersController {
   }
 
   @Get("doctors")
-  async doctors(@Query("page") page = "0", @Query("size") size = "10") {
+  async doctors(
+    @Query("page") page = "0",
+    @Query("size") size = "10",
+    @Query("centerId") centerId?: string
+  ) {
     // Use Raw query to avoid collation issues
     const doctorRole = await this.roleRepo
       .createQueryBuilder("role")
@@ -163,9 +218,14 @@ export class UsersController {
     const queryBuilder = this.userRepo.createQueryBuilder("user");
     queryBuilder
       .where("user.roleId = :roleId", { roleId: doctorRole.id.toString() })
-      .andWhere("user.isDeleted = :isDeleted", { isDeleted: false })
-      .skip(skip)
-      .take(take);
+      .andWhere("user.isDeleted = :isDeleted", { isDeleted: false });
+
+    // Filter by centerId if provided
+    if (centerId) {
+      queryBuilder.andWhere("user.centerId = :centerId", { centerId });
+    }
+
+    queryBuilder.skip(skip).take(take);
 
     const [items, total] = await queryBuilder.getManyAndCount();
     return {

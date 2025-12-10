@@ -80,6 +80,40 @@ export class BookingsService {
 
     const saved = await this.bookingRepo.save(booking);
 
+    // Create appointments for each dose
+    const appointments: Appointment[] = [];
+
+    // First dose appointment
+    const firstAppointment = new Appointment();
+    firstAppointment.bookingId = saved.bookingId;
+    firstAppointment.centerId = center.id;
+    firstAppointment.appointmentDate = request.firstDoseDate;
+    firstAppointment.appointmentTime = request.firstDoseTime;
+    firstAppointment.doseNumber = 1;
+    firstAppointment.status = "SCHEDULED";
+    appointments.push(firstAppointment);
+
+    // Additional dose appointments from doseSchedules
+    if (request.doseSchedules && request.doseSchedules.length > 0) {
+      for (let i = 0; i < request.doseSchedules.length; i++) {
+        const schedule = request.doseSchedules[i];
+        const appointment = new Appointment();
+        appointment.bookingId = saved.bookingId;
+        appointment.centerId = schedule.centerId || center.id;
+        appointment.appointmentDate = schedule.date;
+        appointment.appointmentTime = schedule.time;
+        appointment.doseNumber = i + 2; // 2nd dose, 3rd dose, etc.
+        appointment.status = "SCHEDULED";
+        appointments.push(appointment);
+      }
+    }
+
+    // Save all appointments
+    await this.appointmentRepo.save(appointments);
+    this.logger.log(
+      `Created ${appointments.length} appointments for booking ${saved.bookingId}`
+    );
+
     // ============ BLOCKCHAIN INTEGRATION ============
     // Record booking on blockchain for transparency and immutability
     let blockchainTxHash: string | null = null;
@@ -280,12 +314,39 @@ export class BookingsService {
           },
         });
 
+        // Load appointments with doctor info
+        const appointments = await this.appointmentRepo
+          .createQueryBuilder("appointment")
+          .where("appointment.bookingId = :bookingId", {
+            bookingId: booking.bookingId,
+          })
+          .orderBy("appointment.doseNumber", "ASC")
+          .getMany();
+
+        // Load doctor for each appointment
+        const appointmentsWithDoctor = await Promise.all(
+          appointments.map(async (appointment) => {
+            if (appointment.doctorId) {
+              const doctor = await this.userRepo
+                .createQueryBuilder("user")
+                .where(
+                  "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress COLLATE utf8mb4_general_ci",
+                  { walletAddress: appointment.doctorId }
+                )
+                .getOne();
+              return { ...appointment, doctor };
+            }
+            return appointment;
+          })
+        );
+
         return {
           ...booking,
           patient,
           vaccine,
           center,
           payment,
+          appointments: appointmentsWithDoctor,
         };
       })
     );

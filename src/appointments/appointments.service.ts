@@ -1,10 +1,13 @@
 import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, Not, IsNull } from "typeorm";
 import { BlockchainService } from "../blockchain/blockchain.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { Vaccine } from "../vaccines/entities/vaccine.entity";
 import { Center } from "../centers/entities/center.entity";
+import { Appointment } from "./appointments.entity";
+import { User } from "../users/entities/user.entity";
+import { Booking } from "../bookings/bookings.entity";
 
 @Injectable()
 export class AppointmentsService {
@@ -15,7 +18,13 @@ export class AppointmentsService {
     @InjectRepository(Vaccine)
     private readonly vaccineRepository: Repository<Vaccine>,
     @InjectRepository(Center)
-    private readonly centerRepository: Repository<Center>
+    private readonly centerRepository: Repository<Center>,
+    @InjectRepository(Appointment)
+    private readonly appointmentRepository: Repository<Appointment>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Booking)
+    private readonly bookingRepository: Repository<Booking>
   ) {}
 
   async create(dto: CreateAppointmentDto, patientWalletAddress: string) {
@@ -51,43 +60,375 @@ export class AppointmentsService {
     doctorAddress: string,
     cashierAddress: string
   ) {
-    if (!this.blockchainService.contract)
-      throw new Error("Blockchain not available");
-    const tx = await this.blockchainService.contract.processAppointment(
-      appointmentId,
-      doctorAddress,
-      cashierAddress
+    // Find appointment in database (without doctor relation to avoid collation error)
+    const appointment = await this.appointmentRepository.findOne({
+      where: { appointmentId: appointmentId.toString() },
+      relations: ["booking", "center"],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment ${appointmentId} not found`);
+    }
+
+    // Check if already assigned to a doctor (ASSIGNED or CONFIRMED status)
+    if (
+      appointment.doctorId &&
+      (appointment.status === "ASSIGNED" || appointment.status === "CONFIRMED")
+    ) {
+      throw new Error(
+        `Appointment already assigned to doctor ${
+          appointment.doctor?.fullName || appointment.doctorId
+        }. Please unassign first.`
+      );
+    }
+
+    // Verify doctor and cashier exist
+    const doctor = await this.userRepository.findOne({
+      where: { walletAddress: doctorAddress },
+    });
+    if (!doctor) {
+      throw new NotFoundException(`Doctor ${doctorAddress} not found`);
+    }
+
+    // Update appointment with doctor assignment - status ASSIGNED (waiting for doctor to accept)
+    appointment.doctorId = doctorAddress;
+    appointment.status = "ASSIGNED";
+    await this.appointmentRepository.save(appointment);
+
+    // Update booking doctorAssigned flag and overall status
+    if (appointment.booking) {
+      appointment.booking.doctorAssigned = true;
+      await this.bookingRepository.save(appointment.booking);
+    }
+
+    await this.updateBookingOverallStatus(appointment.bookingId);
+
+    this.logger.log(
+      `Appointment ${appointmentId} assigned to doctor ${doctorAddress} with status ASSIGNED`
     );
-    const receipt = await tx.wait();
+
     return {
-      message: "Appointment processed",
-      transactionHash: receipt.transactionHash ?? receipt.hash,
+      message: "Appointment processed successfully",
+      appointmentId: appointment.appointmentId,
+      doctorId: appointment.doctorId,
+      status: appointment.status,
+    };
+  }
+
+  /**
+   * Doctor confirms acceptance of the assigned case
+   * Only ASSIGNED appointments can be confirmed
+   */
+  async confirmAcceptance(appointmentId: bigint, doctorId: string) {
+    const appointment = await this.appointmentRepository.findOne({
+      where: { appointmentId: appointmentId.toString() },
+      relations: ["booking"],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment ${appointmentId} not found`);
+    }
+
+    // Verify this is the assigned doctor
+    if (appointment.doctorId !== doctorId) {
+      throw new Error("You are not authorized to confirm this appointment");
+    }
+
+    // Only ASSIGNED appointments can be confirmed
+    if (appointment.status !== "ASSIGNED") {
+      throw new Error(
+        `Cannot confirm appointment with status ${appointment.status}. Must be ASSIGNED.`
+      );
+    }
+
+    appointment.status = "CONFIRMED";
+    await this.appointmentRepository.save(appointment);
+
+    // Update booking overall status
+    await this.updateBookingOverallStatus(appointment.bookingId);
+
+    this.logger.log(
+      `Appointment ${appointmentId} confirmed by doctor ${doctorId}`
+    );
+
+    return {
+      message: "Appointment confirmed successfully",
+      appointmentId: appointment.appointmentId,
+      status: appointment.status,
+    };
+  }
+
+  /**
+   * Unassign doctor from appointment (when doctor rejects or needs reassignment)
+   * Only allowed if status is ASSIGNED (before doctor accepts)
+   */
+  async unassignDoctor(appointmentId: bigint) {
+    this.logger.log(
+      `[unassignDoctor] Called with appointmentId: ${appointmentId}`
+    );
+
+    // Load appointment WITHOUT doctor relation to avoid collation error
+    const appointment = await this.appointmentRepository.findOne({
+      where: { appointmentId: appointmentId.toString() },
+      relations: ["booking"],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment ${appointmentId} not found`);
+    }
+
+    this.logger.log(
+      `[unassignDoctor] Found appointment with status: ${appointment.status}, doctorId: ${appointment.doctorId}`
+    );
+
+    if (!appointment.doctorId) {
+      throw new Error("Appointment has no doctor assigned");
+    }
+
+    // Only ASSIGNED status can be unassigned (before doctor accepts)
+    if (appointment.status !== "ASSIGNED") {
+      throw new Error(
+        `Cannot unassign doctor - appointment status is ${appointment.status}. Only ASSIGNED appointments can be unassigned.`
+      );
+    }
+
+    const previousDoctorId = appointment.doctorId;
+
+    // Remove doctor assignment and reset status
+    appointment.doctorId = null;
+    appointment.status = "SCHEDULED";
+    const savedAppointment = await this.appointmentRepository.save(appointment);
+
+    this.logger.log(
+      `[unassignDoctor] Saved appointment, doctorId now: ${savedAppointment.doctorId}, status: ${savedAppointment.status}`
+    );
+
+    // Check if booking still has any other appointments with doctors
+    // Must use the appointmentId from saved entity to ensure type consistency
+    if (appointment.booking) {
+      const otherAppointmentsWithDoctor =
+        await this.appointmentRepository.count({
+          where: {
+            bookingId: appointment.bookingId,
+            appointmentId: Not(savedAppointment.appointmentId),
+            doctorId: Not(IsNull()),
+          },
+        });
+
+      // If no other appointments have doctors, set doctorAssigned to false
+      if (otherAppointmentsWithDoctor === 0) {
+        appointment.booking.doctorAssigned = false;
+        await this.bookingRepository.save(appointment.booking);
+      }
+    }
+
+    // Update booking overall status
+    await this.updateBookingOverallStatus(appointment.bookingId);
+
+    this.logger.log(
+      `Appointment ${appointmentId} unassigned from doctor ${previousDoctorId}`
+    );
+
+    return {
+      message: "Doctor unassigned successfully",
+      appointmentId: appointment.appointmentId,
+      previousDoctor: previousDoctorId,
+      status: appointment.status,
     };
   }
 
   async complete(appointmentId: bigint) {
-    if (!this.blockchainService.contract)
-      throw new Error("Blockchain not available");
-    const tx = await this.blockchainService.contract.completeAppointment(
-      appointmentId
-    );
-    const receipt = await tx.wait();
+    const appointment = await this.appointmentRepository.findOneBy({
+      appointmentId: appointmentId.toString(),
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment ${appointmentId} not found`);
+    }
+
+    // Only CONFIRMED appointments can be completed
+    if (appointment.status !== "CONFIRMED") {
+      throw new Error(
+        `Cannot complete appointment with status ${appointment.status}. Must be CONFIRMED first.`
+      );
+    }
+
+    appointment.status = "COMPLETED";
+    await this.appointmentRepository.save(appointment);
+
+    // Update booking overall status
+    await this.updateBookingOverallStatus(appointment.bookingId);
+
+    this.logger.log(`Appointment ${appointmentId} marked as completed`);
+
     return {
-      message: "Appointment completed",
-      transactionHash: receipt.transactionHash ?? receipt.hash,
+      message: "Appointment completed successfully",
+      appointmentId: appointment.appointmentId,
+      status: appointment.status,
     };
   }
 
   async cancel(appointmentId: bigint) {
-    if (!this.blockchainService.contract)
-      throw new Error("Blockchain not available");
-    const tx = await this.blockchainService.contract.cancelAppointment(
-      appointmentId
-    );
-    const receipt = await tx.wait();
+    const appointment = await this.appointmentRepository.findOne({
+      where: { appointmentId: appointmentId.toString() },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(`Appointment ${appointmentId} not found`);
+    }
+
+    appointment.status = "CANCELLED";
+    await this.appointmentRepository.save(appointment);
+
+    this.logger.log(`Appointment ${appointmentId} cancelled`);
+
     return {
-      message: "Appointment cancelled",
-      transactionHash: receipt.transactionHash ?? receipt.hash,
+      message: "Appointment cancelled successfully",
+      appointmentId: appointment.appointmentId,
+      status: appointment.status,
     };
+  }
+
+  /**
+   * Get all appointments by center (for staff/cashier)
+   */
+  async getAppointmentsByCenter(centerId: string, page = 0, size = 10) {
+    const [appointments, total] = await this.appointmentRepository.findAndCount(
+      {
+        where: { centerId },
+        relations: [
+          "booking",
+          "booking.patient",
+          "booking.vaccine",
+          "center",
+          "doctor",
+        ],
+        skip: page * size,
+        take: size,
+        order: { appointmentDate: "DESC", createdAt: "DESC" },
+      }
+    );
+
+    // Transform to match frontend expected format
+    const result = appointments.map((apt) => ({
+      id: apt.appointmentId,
+      appointmentId: apt.appointmentId,
+      patientName: apt.booking?.patient?.fullName || "N/A",
+      vaccineName: apt.booking?.vaccine?.name || "N/A",
+      centerName: apt.center?.name || "N/A",
+      scheduledDate: apt.appointmentDate,
+      scheduledTime: apt.appointmentTime,
+      doctorName: apt.doctor?.fullName || null,
+      cashierName: null, // TODO: Add cashier relation if needed
+      status: apt.status,
+      doseNumber: apt.doseNumber,
+    }));
+
+    return {
+      result,
+      meta: {
+        page,
+        pageSize: size,
+        total,
+        pages: Math.ceil(total / size),
+      },
+    };
+  }
+
+  /**
+   * Get appointments assigned to a doctor (for doctor's schedule)
+   */
+  async getMySchedule(doctorId: string, page = 0, size = 10) {
+    this.logger.log(
+      `[getMySchedule] Called with doctorId: ${doctorId}, page: ${page}, size: ${size}`
+    );
+
+    // Use query builder to avoid collation issues with doctorId
+    const queryBuilder = this.appointmentRepository
+      .createQueryBuilder("appointment")
+      .leftJoinAndSelect("appointment.booking", "booking")
+      .leftJoinAndSelect("booking.patient", "patient")
+      .leftJoinAndSelect("booking.vaccine", "vaccine")
+      .leftJoinAndSelect("appointment.center", "center")
+      .where("appointment.doctorId COLLATE utf8mb4_general_ci = :doctorId", {
+        doctorId,
+      })
+      .orderBy("appointment.appointmentDate", "ASC")
+      .addOrderBy("appointment.appointmentTime", "ASC")
+      .skip(page * size)
+      .take(size);
+
+    // Log the generated SQL for debugging
+    const sql = queryBuilder.getSql();
+    this.logger.log(`[getMySchedule] Generated SQL: ${sql}`);
+
+    const [appointments, total] = await queryBuilder.getManyAndCount();
+
+    this.logger.log(
+      `[getMySchedule] Found ${total} appointments for doctor ${doctorId}`
+    );
+
+    const result = appointments.map((apt) => ({
+      id: apt.appointmentId,
+      appointmentId: apt.appointmentId,
+      patientName: apt.booking?.patient?.fullName || "N/A",
+      patientPhone: apt.booking?.patient?.phoneNumber || "N/A",
+      patientEmail: apt.booking?.patient?.email || "N/A",
+      vaccineName: apt.booking?.vaccine?.name || "N/A",
+      centerName: apt.center?.name || "N/A",
+      scheduledDate: apt.appointmentDate,
+      scheduledTime: apt.appointmentTime,
+      status: apt.status,
+      doseNumber: apt.doseNumber,
+      notes: apt.notes || "",
+    }));
+
+    return {
+      result,
+      meta: {
+        page,
+        pageSize: size,
+        total,
+        pages: Math.ceil(total / size),
+      },
+    };
+  }
+
+  /**
+   * Update booking overall status based on all its appointments
+   * This method calculates the aggregate status of all appointments in a booking
+   */
+  private async updateBookingOverallStatus(bookingId: string) {
+    // Get all appointments for this booking
+    const appointments = await this.appointmentRepository.find({
+      where: { bookingId },
+    });
+
+    if (!appointments || appointments.length === 0) {
+      this.logger.warn(`No appointments found for booking ${bookingId}`);
+      return;
+    }
+
+    // Calculate overall status based on appointment statuses
+    const statuses = appointments.map((a) => a.status);
+    let overallStatus = "PENDING";
+
+    if (statuses.every((s) => s === "COMPLETED")) {
+      // All appointments completed
+      overallStatus = "COMPLETED";
+    } else if (statuses.some((s) => s === "COMPLETED" || s === "CONFIRMED")) {
+      // At least one appointment in progress or completed
+      overallStatus = "PROGRESS";
+    } else if (statuses.some((s) => s === "ASSIGNED")) {
+      // At least one appointment assigned
+      overallStatus = "ASSIGNED";
+    }
+
+    // Update booking
+    await this.bookingRepository.update(bookingId, { overallStatus });
+
+    this.logger.log(
+      `Updated booking ${bookingId} overall status to ${overallStatus}`
+    );
   }
 }
