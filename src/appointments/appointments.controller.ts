@@ -131,6 +131,12 @@ export class AppointmentsController {
     return result;
   }
 
+  // Get appointments by booking ID
+  @Get("booking/:bookingId")
+  async getAppointmentsByBooking(@Param("bookingId") bookingId: string) {
+    return this.appointmentsService.getAppointmentsByBooking(bookingId);
+  }
+
   @Get(":hash")
   getByHash(@Param("hash") hash: string) {
     return { hash };

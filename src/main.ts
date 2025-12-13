@@ -2,7 +2,10 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import session from "express-session";
+import FileStore from "session-file-store";
 import { AppModule } from "./app.module";
+
+const FileStoreSession = FileStore(session);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,6 +20,11 @@ async function bootstrap() {
 
   app.use(
     session({
+      store: new FileStoreSession({
+        path: "./sessions",
+        ttl: 7 * 24 * 3600, // 7 days in seconds
+        retries: 0,
+      }),
       secret: process.env.SESSION_SECRET || "secret",
       resave: false,
       saveUninitialized: false,

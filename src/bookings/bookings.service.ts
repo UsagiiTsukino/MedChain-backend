@@ -340,6 +340,18 @@ export class BookingsService {
           })
         );
 
+        // Calculate progress
+        const totalDoses = appointments.length;
+        const completedDoses = appointments.filter(
+          (a) => a.status === "COMPLETED"
+        ).length;
+        const nextDose = appointments.find(
+          (a) =>
+            a.status === "SCHEDULED" ||
+            a.status === "ASSIGNED" ||
+            a.status === "CONFIRMED"
+        );
+
         return {
           ...booking,
           patient,
@@ -347,6 +359,21 @@ export class BookingsService {
           center,
           payment,
           appointments: appointmentsWithDoctor,
+          progress: {
+            totalDoses,
+            completedDoses,
+            percentComplete:
+              totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0,
+            nextDose: nextDose
+              ? {
+                  appointmentId: nextDose.appointmentId,
+                  doseNumber: nextDose.doseNumber,
+                  date: nextDose.appointmentDate,
+                  time: nextDose.appointmentTime,
+                  status: nextDose.status,
+                }
+              : null,
+          },
         };
       })
     );
@@ -418,12 +445,44 @@ export class BookingsService {
           },
         });
 
+        // Load appointments to calculate progress
+        const appointments = await this.appointmentRepo.find({
+          where: { bookingId: booking.bookingId },
+          order: { doseNumber: "ASC" },
+        });
+
+        const totalDoses = appointments.length;
+        const completedDoses = appointments.filter(
+          (a) => a.status === "COMPLETED"
+        ).length;
+        const nextDose = appointments.find(
+          (a) =>
+            a.status === "SCHEDULED" ||
+            a.status === "ASSIGNED" ||
+            a.status === "CONFIRMED"
+        );
+
         return {
           ...booking,
           patient,
           vaccine,
           center,
           payment,
+          progress: {
+            totalDoses,
+            completedDoses,
+            percentComplete:
+              totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0,
+            nextDose: nextDose
+              ? {
+                  appointmentId: nextDose.appointmentId,
+                  doseNumber: nextDose.doseNumber,
+                  date: nextDose.appointmentDate,
+                  time: nextDose.appointmentTime,
+                  status: nextDose.status,
+                }
+              : null,
+          },
         };
       })
     );
@@ -466,6 +525,25 @@ export class BookingsService {
         where: { bookingId: bookingId },
       });
 
+      // Get all appointments for this booking to calculate progress
+      const appointments = await this.appointmentRepo.find({
+        where: { bookingId },
+        order: { doseNumber: "ASC" },
+      });
+
+      const totalDoses = appointments.length;
+      const completedDoses = appointments.filter(
+        (a) => a.status === "COMPLETED"
+      ).length;
+
+      // Find next scheduled appointment
+      const nextDose = appointments.find(
+        (a) =>
+          a.status === "SCHEDULED" ||
+          a.status === "ASSIGNED" ||
+          a.status === "CONFIRMED"
+      );
+
       return {
         bookingId: booking.bookingId,
         patientId: booking.patientId,
@@ -479,9 +557,35 @@ export class BookingsService {
         patient: patient || null,
         vaccine: vaccine || null,
         center: center || null,
-        appointmentDate: booking.firstDoseDate || null,
-        appointmentTime: booking.firstDoseTime || null,
+        firstDoseDate: booking.firstDoseDate || null,
+        firstDoseTime: booking.firstDoseTime || null,
         payment: payment || null,
+        // Progress tracking
+        progress: {
+          totalDoses,
+          completedDoses,
+          percentComplete:
+            totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0,
+          nextDose: nextDose
+            ? {
+                appointmentId: nextDose.appointmentId,
+                doseNumber: nextDose.doseNumber,
+                date: nextDose.appointmentDate,
+                time: nextDose.appointmentTime,
+                status: nextDose.status,
+              }
+            : null,
+        },
+        // Appointments list
+        appointments: appointments.map((a) => ({
+          appointmentId: a.appointmentId,
+          doseNumber: a.doseNumber,
+          date: a.appointmentDate,
+          time: a.appointmentTime,
+          status: a.status,
+          doctorId: a.doctorId,
+          centerId: a.centerId,
+        })),
         // Blockchain info
         blockchain: {
           txHash: booking.blockchainTxHash || null,

@@ -380,6 +380,7 @@ export class AppointmentsService {
       scheduledTime: apt.appointmentTime,
       status: apt.status,
       doseNumber: apt.doseNumber,
+      totalDoses: apt.booking?.totalDoses || 1,
       notes: apt.notes || "",
     }));
 
@@ -409,18 +410,24 @@ export class AppointmentsService {
       return;
     }
 
-    // Calculate overall status based on appointment statuses
-    const statuses = appointments.map((a) => a.status);
+    const totalDoses = appointments.length;
+    const completedDoses = appointments.filter(
+      (a) => a.status === "COMPLETED"
+    ).length;
+    const confirmedOrCompletedDoses = appointments.filter(
+      (a) => a.status === "COMPLETED" || a.status === "CONFIRMED"
+    ).length;
+
     let overallStatus = "PENDING";
 
-    if (statuses.every((s) => s === "COMPLETED")) {
-      // All appointments completed
+    if (completedDoses === totalDoses) {
+      // ALL doses completed
       overallStatus = "COMPLETED";
-    } else if (statuses.some((s) => s === "COMPLETED" || s === "CONFIRMED")) {
-      // At least one appointment in progress or completed
+    } else if (confirmedOrCompletedDoses > 0) {
+      // At least one dose in progress or completed
       overallStatus = "PROGRESS";
-    } else if (statuses.some((s) => s === "ASSIGNED")) {
-      // At least one appointment assigned
+    } else if (appointments.some((a) => a.status === "ASSIGNED")) {
+      // At least one dose assigned to doctor
       overallStatus = "ASSIGNED";
     }
 
@@ -428,7 +435,59 @@ export class AppointmentsService {
     await this.bookingRepository.update(bookingId, { overallStatus });
 
     this.logger.log(
-      `Updated booking ${bookingId} overall status to ${overallStatus}`
+      `Updated booking ${bookingId} overall status to ${overallStatus} (${completedDoses}/${totalDoses} doses completed)`
     );
+  }
+
+  /**
+   * Get all appointments for a specific booking
+   * Useful for tracking multi-dose vaccination progress
+   * @param bookingId - The ID of the booking
+   * @returns Array of appointments with doctor and center information
+   */
+  async getAppointmentsByBooking(bookingId: string) {
+    const appointments = await this.appointmentRepository.find({
+      where: { bookingId },
+      relations: ["center"],
+      order: { doseNumber: "ASC" },
+    });
+
+    // Get doctor information separately to avoid collation issues
+    const result = await Promise.all(
+      appointments.map(async (appointment) => {
+        let doctor = null;
+        if (appointment.doctorId) {
+          doctor = await this.userRepository
+            .createQueryBuilder("user")
+            .where(
+              "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress COLLATE utf8mb4_general_ci",
+              { walletAddress: appointment.doctorId }
+            )
+            .getOne();
+        }
+
+        return {
+          appointmentId: appointment.appointmentId,
+          bookingId: appointment.bookingId,
+          doseNumber: appointment.doseNumber,
+          appointmentDate: appointment.appointmentDate,
+          appointmentTime: appointment.appointmentTime,
+          status: appointment.status,
+          center: appointment.center,
+          doctor: doctor
+            ? {
+                walletAddress: doctor.walletAddress,
+                fullName: doctor.fullName,
+                email: doctor.email,
+              }
+            : null,
+          notes: appointment.notes,
+          createdAt: appointment.createdAt,
+          updatedAt: appointment.updatedAt,
+        };
+      })
+    );
+
+    return result;
   }
 }
