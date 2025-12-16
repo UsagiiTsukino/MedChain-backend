@@ -372,6 +372,7 @@ export class AppointmentsService {
       id: apt.appointmentId,
       appointmentId: apt.appointmentId,
       patientName: apt.booking?.patient?.fullName || "N/A",
+      patientAddress: apt.booking?.patient?.walletAddress || null,
       patientPhone: apt.booking?.patient?.phoneNumber || "N/A",
       patientEmail: apt.booking?.patient?.email || "N/A",
       vaccineName: apt.booking?.vaccine?.name || "N/A",

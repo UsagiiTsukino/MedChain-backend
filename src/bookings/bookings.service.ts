@@ -451,6 +451,33 @@ export class BookingsService {
           order: { doseNumber: "ASC" },
         });
 
+        // Load doctor info for each appointment
+        const appointmentsWithDoctor = await Promise.all(
+          appointments.map(async (appointment) => {
+            if (appointment.doctorId) {
+              const doctor = await this.userRepo
+                .createQueryBuilder("user")
+                .where(
+                  "user.walletAddress COLLATE utf8mb4_general_ci = :walletAddress COLLATE utf8mb4_general_ci",
+                  { walletAddress: appointment.doctorId }
+                )
+                .getOne();
+              return {
+                ...appointment,
+                doctor: doctor
+                  ? {
+                      walletAddress: doctor.walletAddress,
+                      fullName: doctor.fullName,
+                      email: doctor.email,
+                      phoneNumber: doctor.phoneNumber,
+                    }
+                  : null,
+              };
+            }
+            return appointment;
+          })
+        );
+
         const totalDoses = appointments.length;
         const completedDoses = appointments.filter(
           (a) => a.status === "COMPLETED"
@@ -468,6 +495,7 @@ export class BookingsService {
           vaccine,
           center,
           payment,
+          appointments: appointmentsWithDoctor, // Include appointments with doctor info
           progress: {
             totalDoses,
             completedDoses,

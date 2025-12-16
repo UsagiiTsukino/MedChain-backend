@@ -4,15 +4,22 @@ import { ValidationPipe } from "@nestjs/common";
 import session from "express-session";
 import FileStore from "session-file-store";
 import { AppModule } from "./app.module";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 
 const FileStoreSession = FileStore(session);
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS for frontend
+  // Enable WebSocket with Socket.IO
+  app.useWebSocketAdapter(new IoAdapter(app));
+
+  // Enable CORS for frontend (REST API + WebSocket)
   app.enableCors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:5173",
+      "http://localhost:3000",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

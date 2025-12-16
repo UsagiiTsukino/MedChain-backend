@@ -14,6 +14,7 @@ import { BookingsModule } from "./bookings/bookings.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { AiChatbotModule } from "./ai-chatbot/ai-chatbot.module";
+import { MessagesModule } from "./messages/messages.module";
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { AiChatbotModule } from "./ai-chatbot/ai-chatbot.module";
     OrdersModule,
     PaymentsModule,
     AiChatbotModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}
