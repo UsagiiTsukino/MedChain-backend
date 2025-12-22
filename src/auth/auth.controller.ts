@@ -217,4 +217,18 @@ export class AuthController {
     console.log("[AuthController] Link MetaMask success:", result);
     return result;
   }
+
+  @Post("update-avatar")
+  async updateAvatar(
+    @Body() body: { avatar: string },
+    @Session() session: Record<string, any>
+  ) {
+    const identifier = session?.walletAddress || session?.email;
+    if (!identifier) {
+      throw new HttpException("Not authenticated", HttpStatus.UNAUTHORIZED);
+    }
+
+    const result = await this.authService.updateAvatar(identifier, body.avatar);
+    return result;
+  }
 }

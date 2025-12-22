@@ -232,6 +232,31 @@ export class AuthService {
     };
   }
 
+  async updateAvatar(identifier: string, avatarUrl: string) {
+    const user = await this.usersRepo
+      .createQueryBuilder("user")
+      .where(
+        "user.walletAddress COLLATE utf8mb4_general_ci = :identifier OR user.email COLLATE utf8mb4_general_ci = :identifier",
+        { identifier }
+      )
+      .getOne();
+
+    if (!user) {
+      throw new HttpException("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    user.avatar = avatarUrl;
+    await this.usersRepo.save(user);
+
+    return {
+      statusCode: 200,
+      message: "Avatar updated successfully",
+      data: {
+        avatar: user.avatar,
+      },
+    };
+  }
+
   async refresh(refreshToken: string) {
     const user = await this.usersRepo
       .createQueryBuilder("user")
