@@ -8,6 +8,7 @@ import { User } from "../users/entities/user.entity";
 import { BookingPayment } from "../payments/entities/booking-payment.entity";
 import { Appointment } from "../appointments/appointments.entity";
 import { BlockchainService } from "../blockchain/blockchain.service";
+import { ExchangeRateService } from "../common/services/exchange-rate.service";
 
 @Injectable()
 export class BookingsService {
@@ -26,7 +27,8 @@ export class BookingsService {
     private readonly bookingPaymentRepo: Repository<BookingPayment>,
     @InjectRepository(Appointment)
     private readonly appointmentRepo: Repository<Appointment>,
-    private readonly blockchainService: BlockchainService
+    private readonly blockchainService: BlockchainService,
+    private readonly exchangeRateService: ExchangeRateService
   ) {}
 
   async createBooking(
@@ -232,11 +234,16 @@ export class BookingsService {
 
     // Calculate payment amount and currency based on method
     if (request.paymentMethod === "PAYPAL") {
-      payment.amount = request.amount * 0.000041; // EXCHANGE_RATE_TO_USD
+      // Convert VND to USD using dynamic exchange rate
+      payment.amount = await this.exchangeRateService.convertVndToUsd(
+        request.amount
+      );
       payment.currency = "USD";
     } else if (request.paymentMethod === "METAMASK") {
-      // Convert VND to ETH (1 ETH = 10,000 VND in demo)
-      payment.amount = request.amount / 10000.0;
+      // Convert VND to ETH using dynamic exchange rate
+      payment.amount = await this.exchangeRateService.convertVndToEth(
+        request.amount
+      );
       payment.currency = "ETH";
     } else {
       // CASH or BANK_TRANSFER - keep VND

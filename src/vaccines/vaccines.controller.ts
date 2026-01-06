@@ -45,7 +45,11 @@ export class VaccinesController {
   async list(
     @Query("q") q?: string,
     @Query("page") page = "0",
-    @Query("size") size = "10"
+    @Query("size") size = "10",
+    @Query("disease") disease?: string,
+    @Query("target") target?: string,
+    @Query("minPrice") minPrice?: string,
+    @Query("maxPrice") maxPrice?: string
   ) {
     const take = Math.max(1, parseInt(size as string, 10) || 10);
     const skip = Math.max(0, parseInt(page as string, 10) || 0) * take;
@@ -54,9 +58,47 @@ export class VaccinesController {
     queryBuilder.where("vaccine.isDeleted = :isDeleted", { isDeleted: false });
 
     if (q) {
-      queryBuilder.andWhere("vaccine.name COLLATE utf8mb4_general_ci LIKE :q", {
-        q: `%${q}%`,
-      });
+      // Tìm kiếm theo tên vaccine, bệnh, hoặc nhà sản xuất
+      queryBuilder.andWhere(
+        "(vaccine.name COLLATE utf8mb4_general_ci LIKE :q OR vaccine.disease COLLATE utf8mb4_general_ci LIKE :q OR vaccine.manufacturer COLLATE utf8mb4_general_ci LIKE :q)",
+        {
+          q: `%${q}%`,
+        }
+      );
+    }
+
+    // Filter theo disease
+    if (disease) {
+      queryBuilder.andWhere(
+        "vaccine.disease COLLATE utf8mb4_general_ci LIKE :disease",
+        {
+          disease: `%${disease}%`,
+        }
+      );
+    }
+
+    // Filter theo target (đối tượng)
+    if (target) {
+      queryBuilder.andWhere(
+        "vaccine.target COLLATE utf8mb4_general_ci LIKE :target",
+        {
+          target: `%${target}%`,
+        }
+      );
+    }
+
+    // Filter theo khoảng giá
+    if (minPrice) {
+      const min = parseFloat(minPrice);
+      if (!isNaN(min)) {
+        queryBuilder.andWhere("vaccine.price >= :minPrice", { minPrice: min });
+      }
+    }
+    if (maxPrice) {
+      const max = parseFloat(maxPrice);
+      if (!isNaN(max)) {
+        queryBuilder.andWhere("vaccine.price < :maxPrice", { maxPrice: max });
+      }
     }
 
     queryBuilder.skip(skip).take(take);

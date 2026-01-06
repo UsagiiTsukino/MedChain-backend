@@ -424,6 +424,9 @@ export class AppointmentsService {
     if (completedDoses === totalDoses) {
       // ALL doses completed
       overallStatus = "COMPLETED";
+
+      // Mint NFT certificate when all doses are completed
+      await this.mintCertificateForCompletedBooking(bookingId, appointments[0]);
     } else if (confirmedOrCompletedDoses > 0) {
       // At least one dose in progress or completed
       overallStatus = "PROGRESS";
@@ -490,5 +493,141 @@ export class AppointmentsService {
     );
 
     return result;
+  }
+
+  /**
+   * Mint NFT certificate when all vaccination doses are completed
+   */
+  private async mintCertificateForCompletedBooking(
+    bookingId: string,
+    firstAppointment: Appointment
+  ) {
+    try {
+      this.logger.log(
+        `[mintCertificate] Starting mint process for booking ${bookingId}`
+      );
+
+      // Get booking with patient information
+      const booking = await this.bookingRepository.findOne({
+        where: { bookingId },
+        relations: ["patient", "vaccine", "center"],
+      });
+
+      if (!booking || !booking.patient) {
+        this.logger.warn(
+          `[mintCertificate] Cannot mint certificate: booking ${bookingId} or patient not found`
+        );
+        return;
+      }
+
+      // Check if certificate already minted
+      if (booking.nftTokenId) {
+        this.logger.log(
+          `[mintCertificate] Certificate already minted for booking ${bookingId}, token ID: ${booking.nftTokenId}`
+        );
+        return;
+      }
+
+      const patient = booking.patient;
+
+      // Use MetaMask wallet if available, otherwise fall back to wallet address
+      const ethAddress = patient.metamaskWallet || patient.walletAddress;
+
+      // Check if patient has valid Ethereum wallet address
+      if (!ethAddress) {
+        this.logger.warn(
+          `[mintCertificate] Cannot mint certificate: patient ${
+            patient.walletAddress || "unknown"
+          } has no wallet address`
+        );
+        return;
+      }
+
+      // Validate Ethereum address format
+      if (!/^0x[a-fA-F0-9]{40}$/.test(ethAddress)) {
+        this.logger.error(
+          `[mintCertificate] Invalid Ethereum address format: ${ethAddress}. Wallet must start with 0x and have 40 hex characters.`
+        );
+        return;
+      }
+
+      this.logger.log(
+        `[mintCertificate] Patient wallet: ${ethAddress} ${
+          patient.metamaskWallet ? "(MetaMask)" : "(Primary)"
+        }`
+      );
+
+      // Get all appointments to count doses
+      const allAppointments = await this.appointmentRepository.find({
+        where: { bookingId },
+      });
+
+      this.logger.log(
+        `[mintCertificate] Total doses: ${allAppointments.length}`
+      );
+      this.logger.log(`[mintCertificate] Vaccine: ${booking.vaccine?.name}`);
+      this.logger.log(`[mintCertificate] Center: ${booking.center?.name}`);
+
+      // Mint NFT certificate
+      this.logger.log(
+        `[mintCertificate] Calling BlockchainService.mintCertificate...`
+      );
+      const result = await this.blockchainService.mintCertificate(
+        ethAddress, // Use validated Ethereum address (MetaMask or primary)
+        bookingId,
+        patient.fullName || "Patient",
+        booking.vaccine?.name || "Unknown Vaccine",
+        booking.center?.name || "Unknown Center",
+        firstAppointment.appointmentDate,
+        allAppointments.length // Total doses
+      );
+
+      this.logger.log(
+        `[mintCertificate] ✅ NFT Certificate minted successfully!`
+      );
+      this.logger.log(`[mintCertificate] Token ID: ${result.tokenId}`);
+      this.logger.log(`[mintCertificate] Token URI: ${result.tokenURI}`);
+      this.logger.log(
+        `[mintCertificate] Transaction Hash: ${result.transactionHash}`
+      );
+      this.logger.log(`[mintCertificate] Block Number: ${result.blockNumber}`);
+
+      // Update booking with NFT info (manual update since TypeORM strict mode)
+      this.logger.log(
+        `[mintCertificate] Updating booking ${bookingId} with NFT info...`
+      );
+      this.logger.log(
+        `[mintCertificate] Saving Token ID: ${result.tokenId}, Transaction Hash: ${result.transactionHash}`
+      );
+      const updateResult = await this.bookingRepository
+        .createQueryBuilder()
+        .update(Booking)
+        .set({
+          nftTokenId: result.tokenId,
+          nftTransactionHash: result.transactionHash,
+        } as any) // Type assertion to bypass TypeORM strict checking
+        .where("bookingId = :bookingId", { bookingId })
+        .execute();
+
+      this.logger.log(
+        `[mintCertificate] ✅ Database updated. Affected rows: ${updateResult.affected}`
+      );
+
+      if (updateResult.affected === 0) {
+        this.logger.error(
+          `[mintCertificate] ⚠️ WARNING: Database update affected 0 rows! Booking ${bookingId} may not exist.`
+        );
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      const errorStack = error instanceof Error ? error.stack : "";
+      this.logger.error(
+        `[mintCertificate] ❌ Failed to mint certificate for booking ${bookingId}`
+      );
+      this.logger.error(`[mintCertificate] Error message: ${errorMessage}`);
+      this.logger.error(`[mintCertificate] Error stack: ${errorStack}`);
+      // Don't throw error, allow booking completion to proceed
+    }
   }
 }

@@ -8,3 +8,6 @@ src/**/*.js.map
 src/**/*.d.ts
 migrations/
 sessions/
+
+# Test and debug scripts
+scripts/

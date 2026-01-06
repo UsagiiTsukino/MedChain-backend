@@ -80,6 +80,23 @@ export class Booking {
   })
   blockchainStatus?: string | null; // PENDING, CONFIRMED, FAILED
 
+  // NFT Certificate fields
+  @Column({
+    type: "varchar",
+    length: 255,
+    name: "nft_token_id",
+    nullable: true,
+  })
+  nftTokenId?: string | null;
+
+  @Column({
+    type: "varchar",
+    length: 255,
+    name: "nft_transaction_hash",
+    nullable: true,
+  })
+  nftTransactionHash?: string | null;
+
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 }

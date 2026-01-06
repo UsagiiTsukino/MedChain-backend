@@ -15,10 +15,13 @@ import { OrdersModule } from "./orders/orders.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { AiChatbotModule } from "./ai-chatbot/ai-chatbot.module";
 import { MessagesModule } from "./messages/messages.module";
+import { CommonModule } from "./common/common.module";
+import { IpfsModule } from "./ipfs/ipfs.module";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CommonModule,
     TypeOrmModule.forRoot({
       // Default to MySQL for local testing; override via env if needed
       type: (process.env.DB_TYPE as any) || "mysql",
@@ -39,6 +42,7 @@ import { MessagesModule } from "./messages/messages.module";
       migrationsRun: false,
     }),
     BlockchainModule,
+    IpfsModule,
     AuthModule,
     UsersModule,
     RolesModule,
